@@ -134,8 +134,8 @@ if __name__ == '__main__':
 
     ## element: appsink
     sink = Gst.ElementFactory.make("appsink", "sink")
-    sink.set_property('emit-signals', True)
-    sink.connect('new-sample', new_sample, None)
+    #sink.set_property('emit-signals', True)
+    #sink.connect('new-sample', new_sample, None)
     
     # Create the empty pipeline
     pipeline = Gst.Pipeline().new("test-pipeline")
