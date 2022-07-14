@@ -117,18 +117,14 @@ if __name__ == '__main__':
     # Create the elements
     ## element: videotesetsrc
     videosrc = Gst.ElementFactory.make("videotestsrc", "videosrc")
-    videosrc.connect('push-buffer', push_buffer)
     
     ## element: capsfilter
     filtercaps = Gst.ElementFactory.make("capsfilter", "filtercaps")
     filtercaps.set_property("caps", Gst.Caps.from_string("video/x-raw, format=BGR, width=320, height=240"))
     
     ## element: appsrc
-    #src = Gst.ElementFactory.make("appsrc", "src")
-    #caps = Gst.caps_from_string("video/x-raw, format=BGR, width=320, height=240, framerate=30/1")
-    #src.set_property('caps', caps)
-    #src.set_property('blocksize', 320*240*3)
-    #src.connect('push-buffer', push_buffer)
+    src = Gst.ElementFactory.make("appsrc", "src")
+    src.connect('push-buffer', push_buffer)
     
     ## element: admetadrawer
     drawer = Gst.ElementFactory.make("admetadrawer", "drawer")
@@ -143,7 +139,7 @@ if __name__ == '__main__':
     pipeline = Gst.Pipeline().new("test-pipeline")
     
     # Build the pipeline
-    pipeline_elements = [src, drawer, videoconvert, sink]
+    pipeline_elements = [videosrc, filtercaps, src, drawer, videoconvert, sink]
     establish_pipeline(pipeline, pipeline_elements)
 
     # Start pipeline
