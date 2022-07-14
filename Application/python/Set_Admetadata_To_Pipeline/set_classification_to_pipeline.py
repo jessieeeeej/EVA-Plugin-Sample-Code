@@ -52,6 +52,7 @@ def enough_data(src, size, length) -> Gst.FlowReturn:
     return Gst.FlowReturn.OK
 
 def push_buffer(src) -> Gst.FlowReturn:
+    cv2.imwrite('a.bmp')
     buf = Gst.Buffer.new()
     labels = ['water bottle', 'camera', 'chair', 'person', 'slipper', 'mouse', 'Triceratops', 'woodpecker']
     duration = 2
@@ -116,14 +117,17 @@ if __name__ == '__main__':
 
     # Create the elements
     ## element: videotesetsrc
-    videosrc = Gst.ElementFactory.make("videotestsrc", "videosrc")
+    #videosrc = Gst.ElementFactory.make("videotestsrc", "videosrc")
     
     ## element: capsfilter
-    filtercaps = Gst.ElementFactory.make("capsfilter", "filtercaps")
-    filtercaps.set_property("caps", Gst.Caps.from_string("video/x-raw, format=BGR, width=320, height=240"))
+    #filtercaps = Gst.ElementFactory.make("capsfilter", "filtercaps")
+    #filtercaps.set_property("caps", Gst.Caps.from_string("video/x-raw, format=BGR, width=320, height=240"))
     
     ## element: appsrc
     src = Gst.ElementFactory.make("appsrc", "src")
+    caps = Gst.caps_from_string("video/x-raw, format=BGR, width=320, height=240, framerate=30/1")
+    src.set_property('caps', caps)
+    src.set_property('blocksize', 320*240*3)
     src.connect('push-buffer', push_buffer)
     
     ## element: admetadrawer
@@ -139,7 +143,7 @@ if __name__ == '__main__':
     pipeline = Gst.Pipeline().new("test-pipeline")
     
     # Build the pipeline
-    pipeline_elements = [videosrc, filtercaps, src, drawer, videoconvert, sink]
+    pipeline_elements = [src, drawer, videoconvert, sink]
     establish_pipeline(pipeline, pipeline_elements)
 
     # Start pipeline
