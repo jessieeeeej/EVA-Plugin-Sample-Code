@@ -110,10 +110,17 @@ if __name__ == '__main__':
     print('Start establish pipeline.')
     # Initialize GStreamer
     Gst.init(sys.argv)
-    
+
     # Create the elements
     ## element: videotesetsrc
-    src = Gst.ElementFactory.make("videotestsrc", "src")
+    #videosrc = Gst.ElementFactory.make("videotestsrc", "videosrc")
+    
+    ## element: capsfilter
+    #filtercaps = Gst.ElementFactory.make("capsfilter", "filtercaps")
+    #filtercaps.set_property("caps", Gst.Caps.from_string("video/x-raw, format=BGR, width=320, height=240"))
+    
+    ## element: appsrc
+    src = Gst.ElementFactory.make("appsrc", "src")
     caps = Gst.caps_from_string("video/x-raw, format=BGR, width=320, height=240, framerate=30/1")
     src.set_property('caps', caps)
     src.set_property('blocksize', 320*240*3)
