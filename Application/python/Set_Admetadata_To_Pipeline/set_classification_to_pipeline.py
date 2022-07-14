@@ -54,13 +54,16 @@ def enough_data(src, size, length) -> Gst.FlowReturn:
 def push_buffer(src) -> Gst.FlowReturn:
     buf = Gst.Buffer.new()
     labels = ['water bottle', 'camera', 'chair', 'person', 'slipper', 'mouse', 'Triceratops', 'woodpecker']
-    #duration = 2
-    time = time.time()
-    class_id = random.randrange(len(labels))
-    class_prob = random.uniform(0, 1)
-    time = time.time()
+    duration = 2
+    time_1 = time.time()
 
     cls = []
+    # Change random data every self.duration time
+    if time.time() - time_1 > duration:
+        class_id = random.randrange(len(labels))
+        class_prob = random.uniform(0, 1)
+        time_1 = time.time()
+      
     cls.append(admeta._Classification(class_id, '', labels[class_id], class_prob))
     # push buffer to appsrc
     admeta.set_classification(buf, src, cls)
@@ -113,18 +116,19 @@ if __name__ == '__main__':
 
     # Create the elements
     ## element: videotesetsrc
-    #videosrc = Gst.ElementFactory.make("videotestsrc", "videosrc")
+    videosrc = Gst.ElementFactory.make("videotestsrc", "videosrc")
+    videosrc.connect('push-buffer', push_buffer)
     
     ## element: capsfilter
-    #filtercaps = Gst.ElementFactory.make("capsfilter", "filtercaps")
-    #filtercaps.set_property("caps", Gst.Caps.from_string("video/x-raw, format=BGR, width=320, height=240"))
+    filtercaps = Gst.ElementFactory.make("capsfilter", "filtercaps")
+    filtercaps.set_property("caps", Gst.Caps.from_string("video/x-raw, format=BGR, width=320, height=240"))
     
     ## element: appsrc
-    src = Gst.ElementFactory.make("appsrc", "src")
-    caps = Gst.caps_from_string("video/x-raw, format=BGR, width=320, height=240, framerate=30/1")
-    src.set_property('caps', caps)
-    src.set_property('blocksize', 320*240*3)
-    src.connect('push-buffer', push_buffer)
+    #src = Gst.ElementFactory.make("appsrc", "src")
+    #caps = Gst.caps_from_string("video/x-raw, format=BGR, width=320, height=240, framerate=30/1")
+    #src.set_property('caps', caps)
+    #src.set_property('blocksize', 320*240*3)
+    #src.connect('push-buffer', push_buffer)
     
     ## element: admetadrawer
     drawer = Gst.ElementFactory.make("admetadrawer", "drawer")
@@ -134,8 +138,6 @@ if __name__ == '__main__':
 
     ## element: appsink
     sink = Gst.ElementFactory.make("appsink", "sink")
-    #sink.set_property('emit-signals', True)
-    #sink.connect('new-sample', new_sample, None)
     
     # Create the empty pipeline
     pipeline = Gst.Pipeline().new("test-pipeline")
