@@ -21,6 +21,7 @@ gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GObject
 
 grabVec = Queue()
+pipeLineOutputVec = Queue()
 
 def need_data(src, length) -> Gst.FlowReturn:
     # wait for image data vector, grabVec, is not full
@@ -51,8 +52,25 @@ def need_data(src, length) -> Gst.FlowReturn:
 def enough_data(src, size, length) -> Gst.FlowReturn:
     return Gst.FlowReturn.OK
 
+def extract_data(sample):
+    buf = sample.get_buffer()
+    caps = sample.get_caps()
+    
+    arr = numpy.ndarray(
+        (caps.get_structure(0).get_value('height'),
+         caps.get_structure(0).get_value('width'),
+         3),
+        buffer=buf.extract_dup(0, buf.get_size()),
+        dtype=numpy.uint8)
+    return arr
+
 def push_buffer(src) -> Gst.FlowReturn:
-    cv2.imwrite('a.bmp')
+    sample = sink.emit('pull-sample')
+    arr = extract_data(sample)
+    pipeLineOutputVec.put(arr.copy())
+
+    if pipeLineOutputVec.qsize() > 0:
+        cv2.imwrite("a.bmp", pipeLineOutputVec.get())
     buf = Gst.Buffer.new()
     labels = ['water bottle', 'camera', 'chair', 'person', 'slipper', 'mouse', 'Triceratops', 'woodpecker']
     duration = 2
@@ -81,7 +99,6 @@ def push_buffer(src) -> Gst.FlowReturn:
         else:
             print("None")
             
-    time.sleep(1)
     return Gst.FlowReturn.OK
 
 def on_message(bus: Gst.Bus, message: Gst.Message, loop: GObject.MainLoop):
