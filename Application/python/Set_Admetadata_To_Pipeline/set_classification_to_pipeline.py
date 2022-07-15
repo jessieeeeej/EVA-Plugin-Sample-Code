@@ -69,8 +69,6 @@ def push_buffer(src) -> Gst.FlowReturn:
     arr = extract_data(sample)
     pipeLineOutputVec.put(arr.copy())
 
-    if pipeLineOutputVec.qsize() > 0:
-        cv2.imwrite("a.bmp", pipeLineOutputVec.get())
     buf = Gst.Buffer.new()
     labels = ['water bottle', 'camera', 'chair', 'person', 'slipper', 'mouse', 'Triceratops', 'woodpecker']
     duration = 2
@@ -171,6 +169,52 @@ if __name__ == '__main__':
     bus = pipeline.get_bus()
     bus.add_signal_watch()
     bus.connect("message", on_message, loop)
+
+    if sys.platform == 'win32':
+        cap = cv2.VideoCapture("ksvideosrc ! videoscale ! video/x-raw, width=1024, height=768 ! videoconvert ! appsink", cv2.CAP_GSTREAMER)
+    elif sys.platform == 'linux':
+        cap = cv2.VideoCapture("v4l2src ! videoscale ! video/x-raw, width=1024, height=768 ! videoconvert ! appsink", cv2.CAP_GSTREAMER)
+    else:
+        print("[VideoCapture] Do not support this system platform.")
+        sys.exit()
+
+    if cap.isOpened() == False:
+        print("ERROR! Unable to open camera")
+        sys.exit()
+
+    if sys.platform == 'win32':
+        writer = cv2.VideoWriter("appsrc ! videoconvert ! video/x-raw, format=BGR, width=640, height=480, framerate=30/1 ! videoconvert ! d3dvideosink sync=false", cv2.CAP_GSTREAMER, 0, 30, (640, 480), True)
+    elif sys.platform == 'linux':
+        writer = cv2.VideoWriter("appsrc ! videoconvert ! video/x-raw, format=BGR, width=640, height=480, framerate=30/1 ! videoconvert ! ximagesink sync=false", cv2.CAP_GSTREAMER, 0, 30,(640, 480), True)
+    else:
+        print("[VideoWriter] Do not support this system platform.")
+        sys.exit()
+        
+    if writer.isOpened() == False:
+        print("=ERR= can't create writer")
+        sys.exit()
+
+    while(True):
+        ret, frame = cap.read()
+        
+        if ret == False:
+            print("ERROR! blank frame grabbed")
+            break
+        
+        # you can do your logic here. Assume you are going to resize the image.
+        resize_frame = cv2.resize(frame,(640, 480))
+        
+        # write back to pipeline through OpenCV to display
+        writer.write(resize_frame)
+        
+        # push the image data to vector for the pipeline created in thread as a data provider
+        grabVec.put(resize_frame)
+        
+        # Save image data queued in pipeLineOutputVec from the pipeline created in thread
+        if pipeLineOutputVec.qsize() > 0:
+            cv2.imwrite("a.bmp", pipeLineOutputVec.get())
+                
+        time.sleep(0.01)
 
     try:
         print("Start to run the pipeline.\n")
