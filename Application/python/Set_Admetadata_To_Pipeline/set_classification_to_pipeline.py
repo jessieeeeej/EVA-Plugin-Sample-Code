@@ -47,10 +47,10 @@ def new_sample(sink, data) -> Gst.FlowReturn:
 
     cls = []
     # Change random data every self.duration time
-    if time.time() - time_1 > duration:
-        class_id = random.randrange(len(labels))
-        class_prob = random.uniform(0, 1)
-        time_1 = time.time()
+    #if time.time() - time_1 > duration:
+    class_id = random.randrange(len(labels))
+    class_prob = random.uniform(0, 1)
+    time_1 = time.time()
       
     cls.append(admeta._Classification(class_id, '', labels[class_id], class_prob))
     # push buffer to appsrc
