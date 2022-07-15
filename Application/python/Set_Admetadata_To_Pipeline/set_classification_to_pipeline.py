@@ -55,7 +55,7 @@ def new_sample(sink, data) -> Gst.FlowReturn:
     cls.append(admeta._Classification(class_id, '', labels[class_id], class_prob))
     # push buffer to appsrc
     admeta.set_classification(buf, sink, cls)
-    
+
     '''
     classification_results = admeta.get_classification(buf,0)
     with classification_results as results:
@@ -168,7 +168,7 @@ if __name__ == '__main__':
     pipeline = Gst.Pipeline().new("test-pipeline")
     
     # Build the pipeline
-    pipeline_elements = [src, drawer, videoconvert, sink]
+    pipeline_elements = [videosrc, filtercaps, drawer, videoconvert, sink]
     establish_pipeline(pipeline, pipeline_elements)
 
     # Start pipeline
