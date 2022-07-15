@@ -65,10 +65,6 @@ def extract_data(sample):
     return arr
 
 def push_buffer(src) -> Gst.FlowReturn:
-    sample = sink.emit('pull-sample')
-    arr = extract_data(sample)
-    pipeLineOutputVec.put(arr.copy())
-
     buf = Gst.Buffer.new()
     labels = ['water bottle', 'camera', 'chair', 'person', 'slipper', 'mouse', 'Triceratops', 'woodpecker']
     duration = 2
@@ -169,7 +165,7 @@ if __name__ == '__main__':
     bus = pipeline.get_bus()
     bus.add_signal_watch()
     bus.connect("message", on_message, loop)
-
+    '''
     if sys.platform == 'win32':
         cap = cv2.VideoCapture("ksvideosrc ! videoscale ! video/x-raw, width=1024, height=768 ! videoconvert ! appsink", cv2.CAP_GSTREAMER)
     elif sys.platform == 'linux':
@@ -215,7 +211,8 @@ if __name__ == '__main__':
             cv2.imwrite("a.bmp", pipeLineOutputVec.get())
                 
         time.sleep(0.01)
-
+    '''
+    
     try:
         print("Start to run the pipeline.\n")
         loop.run()
