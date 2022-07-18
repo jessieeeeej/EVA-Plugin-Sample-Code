@@ -18,26 +18,7 @@ import cv2
 import gi
 gi.require_version('Gst', '1.0')
 
-from gi.repository import Gst, GObject, GstBase
-
-def generate_output(trans, buf) -> Gst.FlowReturn:
-    buf = Gst.Buffer.new()
-    labels = ['water bottle', 'camera', 'chair', 'person', 'slipper', 'mouse', 'Triceratops', 'woodpecker']
-    duration = 2
-    time_1 = time.time()
-
-    cls = []
-    # Change random data every self.duration time
-    #if time.time() - time_1 > duration:
-    class_id = random.randrange(len(labels))
-    class_prob = random.uniform(0, 1)
-    time_1 = time.time()
-      
-    cls.append(admeta._Classification(class_id, '', labels[class_id], class_prob))
-    # push buffer to appsrc
-    admeta.set_classification(buf, trans, cls)
-    
-    return Gst.FlowReturn.OK
+from gi.repository import Gst, GObject
 
 def extract_data(sample):
     buf = sample.get_buffer()
@@ -50,39 +31,6 @@ def extract_data(sample):
         buffer=buf.extract_dup(0, buf.get_size()),
         dtype=numpy.uint8)
     return arr
-
-'''
-    # get classification inference result
-    #buf = sample.get_buffer()
-    buf = Gst.Buffer.new()
-    labels = ['water bottle', 'camera', 'chair', 'person', 'slipper', 'mouse', 'Triceratops', 'woodpecker']
-    duration = 2
-    time_1 = time.time()
-
-    cls = []
-    # Change random data every self.duration time
-    if time.time() - time_1 > duration:
-    class_id = random.randrange(len(labels))
-    class_prob = random.uniform(0, 1)
-    time_1 = time.time()
-      
-    cls.append(admeta._Classification(class_id, '', labels[class_id], class_prob))
-    # push buffer to appsrc
-    admeta.set_classification(buf, sink, cls)
-    
-    classification_results = admeta.get_classification(buf,0)
-    with classification_results as results:
-        if results is not None:
-            for r in results:                
-                print('**********************')
-                print('classification result:')
-                print('id = ', r.index)
-                print('output = ', r.output.decode("utf-8").strip())
-                print('label = ', r.label.decode("utf-8").strip())
-                print('prob = {:.3f}'.format(r.prob))
-        else:
-            print("None")
-'''
 
 def new_sample(sink, data) -> Gst.FlowReturn:
     sample = sink.emit('pull-sample')
@@ -163,15 +111,11 @@ if __name__ == '__main__':
     filtercaps = Gst.ElementFactory.make("capsfilter", "filtercaps")
     filtercaps.set_property("caps", Gst.Caps.from_string("video/x-raw, format=BGR, width=320, height=240"))
 
-    ## element: admetadebuger
-    debuger = Gst.ElementFactory.make("admetadebuger", "debuger")
-    debuger.set_property("type", 0)
-    debuger.set_property("id", 187)
-    debuger.set_property("class", "boy")
-    debuger.set_property("prob", 0.876)
+    ## element: classifier_sample
+    classifier = Gst.ElementFactory.make("classifier_sample", "classifier")
 
-    ## element: admetadebuger
-    writer = Gst.ElementFactory.make("admetawriter", "writer")
+    ## element: admetadrawer
+    drawer = Gst.ElementFactory.make("admetadrawer", "drawer")
 
     ## element: videoconvert
     videoconvert = Gst.ElementFactory.make("videoconvert", "videoconvert")
@@ -185,7 +129,7 @@ if __name__ == '__main__':
     pipeline = Gst.Pipeline().new("test-pipeline")
     
     # Build the pipeline
-    pipeline_elements = [videosrc, filtercaps, drawer, videoconvert, sink]
+    pipeline_elements = [videosrc, filtercaps, classifier, drawer, videoconvert, sink]
     establish_pipeline(pipeline, pipeline_elements)
 
     # Start pipeline
@@ -199,19 +143,6 @@ if __name__ == '__main__':
 
     try:
         print("Start to run the pipeline.\n")
-        while True:
-            labels = ['water bottle', 'camera', 'chair', 'person', 'slipper', 'mouse', 'Triceratops', 'woodpecker']
-            duration = 2
-            time_1 = time.time()
-            
-            cls = []
-            # Change random data every self.duration time
-            if time.time() - time_1 > duration:
-                class_id = random.randrange(len(labels))
-                class_prob = random.uniform(0, 1)
-                time_1 = time.time()
-                cls.append(admeta._Classification(class_id, '', labels[class_id], class_prob))
-
         loop.run()
     except Exception:
         print("in exception")
