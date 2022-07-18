@@ -40,7 +40,8 @@ def new_sample(sink, data) -> Gst.FlowReturn:
     cv2.imwrite("a.bmp", arr.copy())
     
     # get classification inference result
-    buf = sample.get_buffer()
+    #buf = sample.get_buffer()
+    buf = Gst.Buffer.new()
     labels = ['water bottle', 'camera', 'chair', 'person', 'slipper', 'mouse', 'Triceratops', 'woodpecker']
     duration = 2
     time_1 = time.time()
