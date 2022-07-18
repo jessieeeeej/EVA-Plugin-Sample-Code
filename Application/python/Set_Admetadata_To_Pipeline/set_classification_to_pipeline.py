@@ -20,6 +20,25 @@ gi.require_version('Gst', '1.0')
 
 from gi.repository import Gst, GObject
 
+def generate_output(trans, buf) -> Gst.FlowReturn:
+    buf = Gst.Buffer.new()
+    labels = ['water bottle', 'camera', 'chair', 'person', 'slipper', 'mouse', 'Triceratops', 'woodpecker']
+    duration = 2
+    time_1 = time.time()
+
+    cls = []
+    # Change random data every self.duration time
+    #if time.time() - time_1 > duration:
+    class_id = random.randrange(len(labels))
+    class_prob = random.uniform(0, 1)
+    time_1 = time.time()
+      
+    cls.append(admeta._Classification(class_id, '', labels[class_id], class_prob))
+    # push buffer to appsrc
+    admeta.set_classification(buf, trans, cls)
+    
+    return Gst.FlowReturn.OK
+
 def extract_data(sample):
     buf = sample.get_buffer()
     caps = sample.get_caps()
@@ -38,7 +57,7 @@ def new_sample(sink, data) -> Gst.FlowReturn:
     # get image data and save as bmp file
     arr = extract_data(sample)
     cv2.imwrite("a.bmp", arr.copy())
-    
+    '''
     # get classification inference result
     #buf = sample.get_buffer()
     buf = Gst.Buffer.new()
@@ -48,7 +67,7 @@ def new_sample(sink, data) -> Gst.FlowReturn:
 
     cls = []
     # Change random data every self.duration time
-    #if time.time() - time_1 > duration:
+    if time.time() - time_1 > duration:
     class_id = random.randrange(len(labels))
     class_prob = random.uniform(0, 1)
     time_1 = time.time()
@@ -56,8 +75,7 @@ def new_sample(sink, data) -> Gst.FlowReturn:
     cls.append(admeta._Classification(class_id, '', labels[class_id], class_prob))
     # push buffer to appsrc
     admeta.set_classification(buf, sink, cls)
-
-    '''
+    
     classification_results = admeta.get_classification(buf,0)
     with classification_results as results:
         if results is not None:
@@ -74,39 +92,6 @@ def new_sample(sink, data) -> Gst.FlowReturn:
 
     time.sleep(0.01)
     return Gst.FlowReturn.OK
-
-'''
-def push_buffer(src) -> Gst.FlowReturn:
-    buf = Gst.Buffer.new()
-    labels = ['water bottle', 'camera', 'chair', 'person', 'slipper', 'mouse', 'Triceratops', 'woodpecker']
-    duration = 2
-    time_1 = time.time()
-
-    cls = []
-    # Change random data every self.duration time
-    if time.time() - time_1 > duration:
-        class_id = random.randrange(len(labels))
-        class_prob = random.uniform(0, 1)
-        time_1 = time.time()
-      
-    cls.append(admeta._Classification(class_id, '', labels[class_id], class_prob))
-    # push buffer to appsrc
-    admeta.set_classification(buf, src, cls)
-    classification = src.emit('push-buffer', buf)
-    with classification as results:
-        if results is not None:
-            for r in results:                
-                print('**********************')
-                print('classification result:')
-                print('id = ', r.index)
-                print('output = ', r.output.decode("utf-8").strip())
-                print('label = ', r.label.decode("utf-8").strip())
-                print('prob = {:.3f}'.format(r.prob))
-        else:
-            print("None")
-            
-    return Gst.FlowReturn.OK
-'''
 
 def on_message(bus: Gst.Bus, message: Gst.Message, loop: GObject.MainLoop):
     mtype = message.type
@@ -153,6 +138,8 @@ if __name__ == '__main__':
     #src.set_property('caps', caps)
     #src.set_property('blocksize', 320*240*3)
     #src.connect('push-buffer', push_buffer)
+    classifier = Gst.ElementFactory.make("GstBaseTransform", "classifier")
+    classifier.connect("generate_output", generate_output)
     
     ## element: admetadrawer
     drawer = Gst.ElementFactory.make("admetadrawer", "drawer")
