@@ -18,7 +18,7 @@ import cv2
 import gi
 gi.require_version('Gst', '1.0')
 
-from gi.repository import Gst, GObject
+from gi.repository import Gst, GObject, GstBase
 
 def generate_output(trans, buf) -> Gst.FlowReturn:
     buf = Gst.Buffer.new()
@@ -131,6 +131,7 @@ if __name__ == '__main__':
     ## element: capsfilter
     filtercaps = Gst.ElementFactory.make("capsfilter", "filtercaps")
     filtercaps.set_property("caps", Gst.Caps.from_string("video/x-raw, format=BGR, width=320, height=240"))
+    filtercaps.connect("generate_output", generate_output)
     
     ## element: appsrc
     #src = Gst.ElementFactory.make("appsrc", "src")
@@ -138,8 +139,7 @@ if __name__ == '__main__':
     #src.set_property('caps', caps)
     #src.set_property('blocksize', 320*240*3)
     #src.connect('push-buffer', push_buffer)
-    classifier = Gst.ElementFactory.make("GstBaseTransform", "classifier")
-    classifier.connect("generate_output", generate_output)
+    #classifier = Gst.ElementFactory.make("GstBaseTransform", "classifier")
     
     ## element: admetadrawer
     drawer = Gst.ElementFactory.make("admetadrawer", "drawer")
