@@ -40,22 +40,7 @@ def new_sample(sink, data) -> Gst.FlowReturn:
     cv2.imwrite("a.bmp", arr.copy())
     
     # get classification inference result
-    #buf = sample.get_buffer()
-    buf = Gst.Buffer.new()
-    labels = ['water bottle', 'camera', 'chair', 'person', 'slipper', 'mouse', 'Triceratops', 'woodpecker']
-    duration = 2
-    time_1 = time.time()
-
-    cls = []
-    # Change random data every self.duration time
-    if time.time() - time_1 > duration:
-        class_id = random.randrange(len(labels))
-        class_prob = random.uniform(0, 1)
-        time_1 = time.time()
-      
-    cls.append(admeta._Classification(class_id, '', labels[class_id], class_prob))
-    # push buffer to appsrc
-    admeta.set_classification(buf, sink, cls)
+    buf = sample.get_buffer()
     classification_results = admeta.get_classification(buf,0)
     with classification_results as results:
         if results is not None:
