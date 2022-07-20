@@ -57,7 +57,7 @@ G_DEFINE_TYPE_WITH_CODE(AdSetClassification, ad_set_classification, GST_TYPE_VID
 // ************************************************************
 // Required to add this gst_buffer_set_ad_batch_meta for setting 
 // the GstAdBatchMeta to buffer
-GstAdBatchMeta* gst_buffer_set_ad_batch_meta(GstBuffer* buffer, vector<adlink::ai::ClassificationResult> cls)
+GstAdBatchMeta* gst_buffer_set_ad_batch_meta(GstBuffer* buffer, std::vector<adlink::ai::ClassificationResult> cls)
 {
     gpointer state = NULL;
     GstMeta* meta;
@@ -121,9 +121,9 @@ ad_set_classification_class_init(AdSetClassificationClass *klass)
 
   // adding a pad
   gst_element_class_add_pad_template(gstelement_class,
-                                     gst_static_pad_template_set(&src_factory));
+                                     gst_static_pad_template_get(&src_factory));
   gst_element_class_add_pad_template(gstelement_class,
-                                     gst_static_pad_template_set(&sink_factory));
+                                     gst_static_pad_template_get(&sink_factory));
 
   // override
   gstvideofilter_class->transform_frame_ip =
@@ -206,9 +206,10 @@ ad_set_classification_transform_frame_ip(GstVideoFilter *filter,
 static void 
 setClassificationData(GstBuffer* buffer)
 {
+    GstMeta* meta = gst_buffer_iterate_meta(buffer, NULL);
     AdBatch &batch = meta->batch;
-    vector<adlink::ai::ClassificationResult> cls;
-    string labels = ['water bottle', 'camera', 'chair', 'person', 'slipper', 'mouse', 'Triceratops', 'woodpecker'];
+    std::vector<adlink::ai::ClassificationResult> cls;
+    std::vector<std::string> labels{'water bottle', 'camera', 'chair', 'person', 'slipper', 'mouse', 'Triceratops', 'woodpecker'};
     srand( time(NULL) );
         
     if( batch.frames.size() > 0 )
@@ -219,7 +220,7 @@ setClassificationData(GstBuffer* buffer)
         {
             adlink::ai::ClassificationResult classification = new ClassificationResult;
             classification.index = (rand() % labels.size());
-            classification.output = '';
+            classification.output = "";
             classification.label = labels[classification.index];
             classification.prob = classification.index / labels.size();
             cls.push_back( classification );
