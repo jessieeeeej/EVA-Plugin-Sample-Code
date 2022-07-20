@@ -59,7 +59,7 @@ GstAdBatchMeta* gst_buffer_get_ad_batch_meta(GstBuffer* buffer)
     GstMeta* meta;
     const GstMetaInfo* info = GST_AD_BATCH_META_INFO;
     
-    while ((meta = gst_buffer_iterate_meta (buffer, &state))) 
+    while ((meta = gst_buffer_iterate_meta(buffer, &state))) 
     {
         if (meta->info->api == info->api) 
         {

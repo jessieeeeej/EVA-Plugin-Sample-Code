@@ -10,6 +10,10 @@
 #include <glib/gstdio.h>
 
 #include <iostream>
+#include <vector>
+#include <string>
+#include <stdlib.h> // include random value function
+#include <time.h>   // include time
 #include "gstadmeta.h" // include gstadmeta.h for retrieving the inference results
 
 #define PLUGIN_NAME "adsetclassification"
@@ -53,7 +57,7 @@ G_DEFINE_TYPE_WITH_CODE(AdSetClassification, ad_set_classification, GST_TYPE_VID
 // ************************************************************
 // Required to add this gst_buffer_set_ad_batch_meta for setting 
 // the GstAdBatchMeta to buffer
-GstAdBatchMeta* gst_buffer_set_ad_batch_meta(GstBuffer* buffer)
+GstAdBatchMeta* gst_buffer_set_ad_batch_meta(GstBuffer* buffer, vector<adlink::ai::ClassificationResult> cls)
 {
     gpointer state = NULL;
     GstMeta* meta;
@@ -65,7 +69,18 @@ GstAdBatchMeta* gst_buffer_set_ad_batch_meta(GstBuffer* buffer)
         {
             GstAdMeta *admeta = (GstAdMeta *) meta;
             if (admeta->type == AdBatchMeta)
-                return (GstAdBatchMeta*)meta;
+            {
+                AdBatch &batch = meta->batch;
+                if ( batch.frames.size() > 0 )
+                {
+                    VideoFrameData frame_info = batch.frames[0];
+                    for(int i = 0 ; i < frame_info.class_results.size() ; ++i) 
+                    {
+                        frame_info.class_results[i] = cls[i];
+                    }
+                    return (GstAdBatchMeta*)meta;
+                }
+            }
         }
     }
     return NULL;
@@ -191,31 +206,26 @@ ad_set_classification_transform_frame_ip(GstVideoFilter *filter,
 static void 
 setClassificationData(GstBuffer* buffer)
 {
-    GstAdBatchMeta *meta = gst_buffer_set_ad_batch_meta(buffer);
-    if (meta == NULL)
-        GST_MESSAGE("Adlink metadata is not exist!");
-    else
-    {
-        AdBatch &batch = meta->batch;
+    AdBatch &batch = meta->batch;
+    vector<adlink::ai::ClassificationResult> cls;
+    string labels = ['water bottle', 'camera', 'chair', 'person', 'slipper', 'mouse', 'Triceratops', 'woodpecker'];
+    srand( time(NULL) );
         
-        bool frame_exist = batch.frames.size() > 0 ? true : false;
-        if(frame_exist)
+    if( batch.frames.size() > 0 )
+    {
+        VideoFrameData frame_info = batch.frames[0];
+        int classificationResultNumber = frame_info.class_results.size();
+        for( int i = 0 ; i < classificationResultNumber ; ++i )
         {
-            VideoFrameData frame_info = batch.frames[0];
-            int classificationResultNumber = frame_info.class_results.size();
-            std::cout << "there are " << classificationResultNumber << " results." << std::endl;
-            for(int i = 0 ; i < classificationResultNumber ; ++i)
-            {
-                std::cout << "*********** classification result #" << (i+1) << std::endl;
-                adlink::ai::ClassificationResult classification_result = frame_info.class_results[i];
-                
-                std::cout << "index = " << classification_result.index << std::endl;
-                std::cout << "output = " << classification_result.output << std::endl;
-                std::cout << "label = " << classification_result.label << std::endl;
-                std::cout << "prob = " << classification_result.prob << std::endl;
-            }
+            adlink::ai::ClassificationResult classification = new ClassificationResult;
+            classification.index = (rand() % labels.size());
+            classification.output = '';
+            classification.label = labels[classification.index];
+            classification.prob = classification.index / labels.size();
+            cls.push_back( classification );
         }
         
+        gst_buffer_set_ad_batch_meta(buffer, cls);
     }
 }
 
