@@ -62,33 +62,44 @@ GstAdBatchMeta* gst_buffer_set_ad_batch_meta(GstBuffer* buffer, std::vector<adli
     gpointer state = NULL;
     GstMeta* meta;
     const GstMetaInfo* info = GST_AD_BATCH_META_INFO;
+    std::cout << "*******0" << std::endl ;
     
     while ((meta = gst_buffer_iterate_meta (buffer, &state))) 
-    {
+    {	
+        std::cout << "*******1" << std::endl ;
+        //gst_buffer_remove_meta(buffer, meta);
         if (meta->info->api == info->api) 
         {
             GstAdMeta *admeta = (GstAdMeta *) meta;
+            std::cout << "*******2" << std::endl ;
             if (admeta->type == AdBatchMeta)
             {
-                AdBatch &batch = meta->batch;
+                GstAdBatchMeta *adbatchmeta = (GstAdBatchMeta*)meta;
+                AdBatch &batch = adbatchmeta->batch;
+                std::cout << batch.frames.size() << "*******3" << std::endl ;
                 if ( batch.frames.size() > 0 )
                 {
                     VideoFrameData frame_info = batch.frames[0];
-                    for(int i = 0 ; i < frame_info.class_results.size() ; ++i) 
+                    std::cout << frame_info.class_results.size() << "*******4" << std::endl ;
+                    for(unsigned int i = 0 ; i < frame_info.class_results.size() ; ++i) 
                     {
                         frame_info.class_results[i] = cls[i];
+                        std::cout << cls[i].label << std::endl ;
                     }
+                    //GST_AD_BATCH_META_INFO = gst_ad_batch_meta_get_info(adbatchmeta);
+		    meta = gst_buffer_add_meta(buffer, info, NULL);
                     return (GstAdBatchMeta*)meta;
+                    
                 }
             }
         }
+        return NULL;
     }
-    return NULL;
 }
 // ************************************************************
 
 static void ad_set_classification_set_property(GObject *object, guint property_id, const GValue *value, GParamSpec *pspec);
-static void ad_set_classification_set_property(GObject *object, guint property_id, GValue *value, GParamSpec *pspec);
+static void ad_set_classification_get_property(GObject *object, guint property_id, GValue *value, GParamSpec *pspec);
 static void ad_set_classification_dispose(GObject *object);
 static void ad_set_classification_finalize(GObject *object);
 static GstFlowReturn ad_set_classification_transform_frame_ip(GstVideoFilter *filter, GstVideoFrame *frame);
@@ -110,12 +121,12 @@ ad_set_classification_class_init(AdSetClassificationClass *klass)
 
   // override method
   gobject_class->set_property = ad_set_classification_set_property;
-  gobject_class->set_property = ad_set_classification_set_property;
+  gobject_class->get_property = ad_set_classification_get_property;
   gobject_class->dispose = ad_set_classification_dispose;
   gobject_class->finalize = ad_set_classification_finalize;
 
   gst_element_class_set_static_metadata(gstelement_class,
-                                        "Set classification result from admetadata element example", "Video/Filter",
+                                        "Set classification result to admetadata element example", "Video/Filter",
                                         "Example of set classification result from admetadata",
                                         "Dr. Paul Lin <paul.lin@adlinktech.com>");
 
@@ -158,7 +169,7 @@ ad_set_classification_set_property(GObject *object, guint property_id,
 }
 
 static void
-ad_set_classification_set_property(GObject *object, guint property_id,
+ad_set_classification_get_property(GObject *object, guint property_id,
                                 GValue *value, GParamSpec *pspec)
 {
   AdSetClassification *sample_filter = AD_SET_CLASSIFICATION(object);
@@ -196,8 +207,9 @@ ad_set_classification_transform_frame_ip(GstVideoFilter *filter,
 
   gst_buffer_map(frame->buffer, &info, GST_MAP_READ);
   
-  // Set classification from admetadata
+  // Set classification
   setClassificationData(frame->buffer);
+  std::cout << "*******setClassificationData" << std::endl ;
 
   gst_buffer_unmap(frame->buffer, &info);
   return GST_FLOW_OK;
@@ -206,28 +218,20 @@ ad_set_classification_transform_frame_ip(GstVideoFilter *filter,
 static void 
 setClassificationData(GstBuffer* buffer)
 {
-    GstMeta* meta = gst_buffer_iterate_meta(buffer, NULL);
-    AdBatch &batch = meta->batch;
     std::vector<adlink::ai::ClassificationResult> cls;
-    std::vector<std::string> labels{'water bottle', 'camera', 'chair', 'person', 'slipper', 'mouse', 'Triceratops', 'woodpecker'};
+    std::vector<std::string> labels = {"water bottle", "camera", "chair", "person", "slipper", "mouse", "Triceratops", "woodpecker"};
     srand( time(NULL) );
         
-    if( batch.frames.size() > 0 )
-    {
-        VideoFrameData frame_info = batch.frames[0];
-        int classificationResultNumber = frame_info.class_results.size();
-        for( int i = 0 ; i < classificationResultNumber ; ++i )
-        {
-            adlink::ai::ClassificationResult classification = new ClassificationResult;
-            classification.index = (rand() % labels.size());
-            classification.output = "";
-            classification.label = labels[classification.index];
-            classification.prob = classification.index / labels.size();
-            cls.push_back( classification );
-        }
+    // Create random labels
+    adlink::ai::ClassificationResult classification;
+    classification.index = (rand() % labels.size());
+    classification.output = "";
+    classification.label = labels[classification.index];
+    std::cout << "*******label: " << classification.label << std::endl ;
+    classification.prob = classification.index / labels.size();
+    cls.push_back( classification );
         
-        gst_buffer_set_ad_batch_meta(buffer, cls);
-    }
+    GstAdBatchMeta *meta = gst_buffer_set_ad_batch_meta(buffer, cls);
 }
 
 // plugin registration
