@@ -55,46 +55,24 @@ G_DEFINE_TYPE_WITH_CODE(AdSetClassification, ad_set_classification, GST_TYPE_VID
                             DEBUG_INIT)
 
 // ************************************************************
-// Required to add this gst_buffer_set_ad_batch_meta for setting 
-// the GstAdBatchMeta to buffer
-GstAdBatchMeta* gst_buffer_set_ad_batch_meta(GstBuffer* buffer, std::vector<adlink::ai::ClassificationResult> cls)
+// Required to add this gst_buffer_get_ad_batch_meta for retrieving 
+// the GstAdBatchMeta from buffer
+GstAdBatchMeta* gst_buffer_get_ad_batch_meta(GstBuffer* buffer)
 {
     gpointer state = NULL;
     GstMeta* meta;
     const GstMetaInfo* info = GST_AD_BATCH_META_INFO;
-    std::cout << "*******0" << std::endl ;
     
     while ((meta = gst_buffer_iterate_meta (buffer, &state))) 
-    {	
-        std::cout << "*******1" << std::endl ;
-        //gst_buffer_remove_meta(buffer, meta);
+    {
         if (meta->info->api == info->api) 
         {
             GstAdMeta *admeta = (GstAdMeta *) meta;
-            std::cout << "*******2" << std::endl ;
             if (admeta->type == AdBatchMeta)
-            {
-                GstAdBatchMeta *adbatchmeta = (GstAdBatchMeta*)meta;
-                AdBatch &batch = adbatchmeta->batch;
-                std::cout << batch.frames.size() << "*******3" << std::endl ;
-                if ( batch.frames.size() > 0 )
-                {
-                    VideoFrameData frame_info = batch.frames[0];
-                    std::cout << frame_info.class_results.size() << "*******4" << std::endl ;
-                    for(unsigned int i = 0 ; i < frame_info.class_results.size() ; ++i) 
-                    {
-                        frame_info.class_results[i] = cls[i];
-                        std::cout << cls[i].label << std::endl ;
-                    }
-                    //GST_AD_BATCH_META_INFO = gst_ad_batch_meta_get_info(adbatchmeta);
-		    meta = gst_buffer_add_meta(buffer, info, NULL);
-                    return (GstAdBatchMeta*)meta;
-                    
-                }
-            }
+                return (GstAdBatchMeta*)meta;
         }
-        return NULL;
     }
+    return NULL;
 }
 // ************************************************************
 
@@ -209,7 +187,6 @@ ad_set_classification_transform_frame_ip(GstVideoFilter *filter,
   
   // Set classification
   setClassificationData(frame->buffer);
-  std::cout << "*******setClassificationData" << std::endl ;
 
   gst_buffer_unmap(frame->buffer, &info);
   return GST_FLOW_OK;
@@ -218,20 +195,29 @@ ad_set_classification_transform_frame_ip(GstVideoFilter *filter,
 static void 
 setClassificationData(GstBuffer* buffer)
 {
-    std::vector<adlink::ai::ClassificationResult> cls;
-    std::vector<std::string> labels = {"water bottle", "camera", "chair", "person", "slipper", "mouse", "Triceratops", "woodpecker"};
-    srand( time(NULL) );
+    gpointer state = NULL;
+    GstAdBatchMeta* meta;
+    const GstMetaInfo* info = GST_AD_BATCH_META_INFO;
+    meta = (GstAdBatchMeta *)gst_buffer_add_meta(buffer, info, &state);
         
-    // Create random labels
-    adlink::ai::ClassificationResult classification;
-    classification.index = (rand() % labels.size());
-    classification.output = "";
-    classification.label = labels[classification.index];
-    std::cout << "*******label: " << classification.label << std::endl ;
-    classification.prob = classification.index / labels.size();
-    cls.push_back( classification );
-        
-    GstAdBatchMeta *meta = gst_buffer_set_ad_batch_meta(buffer, cls);
+    bool frame_exist = meta->batch.frames.size() > 0 ? true : false;
+    if(!frame_exist)
+    {
+        VideoFrameData frame_info;
+	std::vector<adlink::ai::ClassificationResult> cls;
+	std::vector<std::string> labels = {"water bottle", "camera", "chair", "person", "slipper", "mouse", "Triceratops", "woodpecker"};
+	srand( time(NULL) );
+		
+	// Create random labels
+	adlink::ai::ClassificationResult classification;
+	classification.index = (rand() % labels.size());
+	classification.output = "";
+	classification.label = labels[classification.index];
+	classification.prob = (double)classification.index / labels.size();
+
+        frame_info.class_results.push_back(classification);
+	meta->batch.frames.push_back(frame_info);
+    }
 }
 
 // plugin registration
