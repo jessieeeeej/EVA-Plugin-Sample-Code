@@ -1,8 +1,12 @@
+//**
+//   gst-launch-1.0 videotestsrc ! video/x-raw, width=640, height=480 ! adsetobjectdetection ! admetadrawer ! videoconvert ! ximagesink
+//**
+
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
-#include "adgetobjectdetection.h"
+#include "adsetobjectdetection.h"
 
 #include <gst/gst.h>
 #include <gst/video/video.h>
@@ -10,25 +14,29 @@
 #include <glib/gstdio.h>
 
 #include <iostream>
+#include <vector>
+#include <string>
+#include <stdlib.h> // include random value function
+#include <time.h>   // include time
 #include "gstadmeta.h" // include gstadmeta.h for retrieving the inference results
 
-#define PLUGIN_NAME "adgetobjectdetection"
+#define PLUGIN_NAME "adsetobjectdetection"
 
-#define AD_GET_OBJECT_DETECTION_LOCK(sample_filter) \
-  (g_rec_mutex_lock(&((AdGetObjectDetection *)sample_filter)->priv->mutex))
+#define AD_SET_OBJECT_DETECTION_LOCK(sample_filter) \
+  (g_rec_mutex_lock(&((AdSetObjectDetection *)sample_filter)->priv->mutex))
 
-#define AD_GET_OBJECT_DETECTION_UNLOCK(sample_filter) \
-  (g_rec_mutex_unlock(&((AdGetObjectDetection *)sample_filter)->priv->mutex))
+#define AD_SET_OBJECT_DETECTION_UNLOCK(sample_filter) \
+  (g_rec_mutex_unlock(&((AdSetObjectDetection *)sample_filter)->priv->mutex))
 
-GST_DEBUG_CATEGORY_STATIC(ad_get_object_detection_debug_category);
-#define GST_CAT_DEFAULT ad_get_object_detection_debug_category
+GST_DEBUG_CATEGORY_STATIC(ad_set_object_detection_debug_category);
+#define GST_CAT_DEFAULT ad_set_object_detection_debug_category
 
 enum
 {
   PROP_0
 };
 
-struct _AdGetObjectDetectionPrivate
+struct _AdSetObjectDetectionPrivate
 {
   GRecMutex mutex;
 };
@@ -44,43 +52,21 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE("src",
                                                                   GST_STATIC_CAPS(GST_VIDEO_CAPS_MAKE("{ BGR }")));
 
 #define DEBUG_INIT \
-  GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, PLUGIN_NAME, 0, "debug category for get object detection element");
+  GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, PLUGIN_NAME, 0, "debug category for set object detection element");
 
-G_DEFINE_TYPE_WITH_CODE(AdGetObjectDetection, ad_get_object_detection, GST_TYPE_VIDEO_FILTER,
-                        G_ADD_PRIVATE(AdGetObjectDetection)
+G_DEFINE_TYPE_WITH_CODE(AdSetObjectDetection, ad_set_object_detection, GST_TYPE_VIDEO_FILTER,
+                        G_ADD_PRIVATE(AdSetObjectDetection)
                             DEBUG_INIT)
 
-// ************************************************************
-// Required to add this gst_buffer_get_ad_batch_meta for retrieving 
-// the GstAdBatchMeta from buffer
-GstAdBatchMeta* gst_buffer_get_ad_batch_meta(GstBuffer* buffer)
-{
-    gpointer state = NULL;
-    GstMeta* meta;
-    const GstMetaInfo* info = GST_AD_BATCH_META_INFO;
-    
-    while ((meta = gst_buffer_iterate_meta (buffer, &state))) 
-    {
-        if (meta->info->api == info->api) 
-        {
-            GstAdMeta *admeta = (GstAdMeta *) meta;
-            if (admeta->type == AdBatchMeta)
-                return (GstAdBatchMeta*)meta;
-        }
-    }
-    return NULL;
-}
-// ************************************************************
-
-static void ad_get_object_detection_set_property(GObject *object, guint property_id, const GValue *value, GParamSpec *pspec);
-static void ad_get_object_detection_get_property(GObject *object, guint property_id, GValue *value, GParamSpec *pspec);
-static void ad_get_object_detection_dispose(GObject *object);
-static void ad_get_object_detection_finalize(GObject *object);
-static GstFlowReturn ad_get_object_detection_transform_frame_ip(GstVideoFilter *filter, GstVideoFrame *frame);
-static void getObjectDetectionData(GstBuffer* buffer);
+static void ad_set_object_detection_set_property(GObject *object, guint property_id, const GValue *value, GParamSpec *pspec);
+static void ad_set_object_detection_get_property(GObject *object, guint property_id, GValue *value, GParamSpec *pspec);
+static void ad_set_object_detection_dispose(GObject *object);
+static void ad_set_object_detection_finalize(GObject *object);
+static GstFlowReturn ad_set_object_detection_transform_frame_ip(GstVideoFilter *filter, GstVideoFrame *frame);
+static void setObjectDetectionData(GstBuffer* buffer);
 
 static void
-ad_get_object_detection_class_init(AdGetObjectDetectionClass *klass)
+ad_set_object_detection_class_init(AdSetObjectDetectionClass *klass)
 {
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
@@ -92,15 +78,15 @@ ad_get_object_detection_class_init(AdGetObjectDetectionClass *klass)
 
   GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, PLUGIN_NAME, 0, PLUGIN_NAME);
 
-  gobject_class->set_property = ad_get_object_detection_set_property;
-  gobject_class->get_property = ad_get_object_detection_get_property;
-  gobject_class->dispose = ad_get_object_detection_dispose;
-  gobject_class->finalize = ad_get_object_detection_finalize;
+  gobject_class->set_property = ad_set_object_detection_set_property;
+  gobject_class->get_property = ad_set_object_detection_get_property;
+  gobject_class->dispose = ad_set_object_detection_dispose;
+  gobject_class->finalize = ad_set_object_detection_finalize;
 
   gst_element_class_set_static_metadata(gstelement_class,
-                                        "Get object detection result from admetadata element example", "Video/Filter",
-                                        "Example of get object detection result from admetadata",
-                                        "Dr. Paul Lin <paul.lin@adlinktech.com>");
+                                        "Set object detection result element example", "Video/Filter",
+                                        "Example of setting object detection result",
+                                        "Jessie Huang <yun-chieh.huang@adlinktech.com>");
 
   gst_element_class_add_pad_template(gstelement_class,
                                      gst_static_pad_template_get(&src_factory));
@@ -108,25 +94,25 @@ ad_get_object_detection_class_init(AdGetObjectDetectionClass *klass)
                                      gst_static_pad_template_get(&sink_factory));
 
   gstvideofilter_class->transform_frame_ip =
-      GST_DEBUG_FUNCPTR(ad_get_object_detection_transform_frame_ip);
+      GST_DEBUG_FUNCPTR(ad_set_object_detection_transform_frame_ip);
 }
 
 static void
-ad_get_object_detection_init(AdGetObjectDetection *
+ad_set_object_detection_init(AdSetObjectDetection *
                             sample_filter)
 {
-  sample_filter->priv = (AdGetObjectDetectionPrivate *)ad_get_object_detection_get_instance_private(sample_filter);
+  sample_filter->priv = (AdSetObjectDetectionPrivate *)ad_set_object_detection_get_instance_private(sample_filter);
 
   g_rec_mutex_init(&sample_filter->priv->mutex);
 }
 
 static void
-ad_get_object_detection_set_property(GObject *object, guint property_id,
+ad_set_object_detection_set_property(GObject *object, guint property_id,
                                 const GValue *value, GParamSpec *pspec)
 {
-  AdGetObjectDetection *sample_filter = AD_GET_OBJECT_DETECTION(object);
+  AdSetObjectDetection *sample_filter = AD_SET_OBJECT_DETECTION(object);
 
-  AD_GET_OBJECT_DETECTION_LOCK(sample_filter);
+  AD_SET_OBJECT_DETECTION_LOCK(sample_filter);
 
   switch (property_id)
   {
@@ -135,16 +121,16 @@ ad_get_object_detection_set_property(GObject *object, guint property_id,
     break;
   }
 
-  AD_GET_OBJECT_DETECTION_UNLOCK(sample_filter);
+  AD_SET_OBJECT_DETECTION_UNLOCK(sample_filter);
 }
 
 static void
-ad_get_object_detection_get_property(GObject *object, guint property_id,
+ad_set_object_detection_get_property(GObject *object, guint property_id,
                                 GValue *value, GParamSpec *pspec)
 {
-  AdGetObjectDetection *sample_filter = AD_GET_OBJECT_DETECTION(object);
+  AdSetObjectDetection *sample_filter = AD_SET_OBJECT_DETECTION(object);
 
-  AD_GET_OBJECT_DETECTION_LOCK(sample_filter);
+  AD_SET_OBJECT_DETECTION_LOCK(sample_filter);
 
   switch (property_id)
   {
@@ -153,74 +139,85 @@ ad_get_object_detection_get_property(GObject *object, guint property_id,
     break;
   }
 
-  AD_GET_OBJECT_DETECTION_UNLOCK(sample_filter);
+  AD_SET_OBJECT_DETECTION_UNLOCK(sample_filter);
 }
 
 static void
-ad_get_object_detection_dispose(GObject *object)
+ad_set_object_detection_dispose(GObject *object)
 {
 }
 
 static void
-ad_get_object_detection_finalize(GObject *object)
+ad_set_object_detection_finalize(GObject *object)
 {
-  AdGetObjectDetection *sample_filter = AD_GET_OBJECT_DETECTION(object);
+  AdSetObjectDetection *sample_filter = AD_SET_OBJECT_DETECTION(object);
 
   g_rec_mutex_clear(&sample_filter->priv->mutex);
 }
 
 static GstFlowReturn
-ad_get_object_detection_transform_frame_ip(GstVideoFilter *filter,
+ad_set_object_detection_transform_frame_ip(GstVideoFilter *filter,
                                       GstVideoFrame *frame)
 {
   GstMapInfo info;
 
   gst_buffer_map(frame->buffer, &info, GST_MAP_READ);
   
-  // Get object detection from admetadata
-  getObjectDetectionData(frame->buffer);
+  // Set object detection
+  setObjectDetectionData(frame->buffer);
 
   gst_buffer_unmap(frame->buffer, &info);
   return GST_FLOW_OK;
 }
 
 static void 
-getObjectDetectionData(GstBuffer* buffer)
+setObjectDetectionData(GstBuffer* buffer)
 {
-    GstAdBatchMeta *meta = gst_buffer_get_ad_batch_meta(buffer);
-    if (meta == NULL)
-        GST_MESSAGE("Adlink metadata is not exist!");
-    else
+    gpointer state = NULL;
+    GstAdBatchMeta* meta;
+    const GstMetaInfo* info = GST_AD_BATCH_META_INFO;
+    meta = (GstAdBatchMeta *)gst_buffer_add_meta(buffer, info, &state);
+        
+    bool frame_exist = meta->batch.frames.size() > 0 ? true : false;
+    if(!frame_exist)
     {
-        AdBatch &batch = meta->batch;
-        bool frame_exist = batch.frames.size() > 0 ? true : false;
-        if(frame_exist)
-        {
-            VideoFrameData frame_info = batch.frames[0];
-            int detectionResultNumber = frame_info.detection_results.size();
-            std::cout << "detection result number = " << detectionResultNumber << std::endl;
-            for(int i = 0 ; i < detectionResultNumber ; ++i)
-            {
-                std::cout << "========== metadata in application ==========\n";
-                std::cout << "Class = " << frame_info.detection_results[i].obj_id << std::endl;
-                std::cout << "Label = " << frame_info.detection_results[i].obj_label << std::endl;
-                std::cout << "Prob =  " << frame_info.detection_results[i].prob << std::endl;
-                std::cout << "(x1, y1, x2, y2) = (" 
-                << frame_info.detection_results[i].x1 << ", " 
-                << frame_info.detection_results[i].y1 << ", "
-                << frame_info.detection_results[i].x2 << ", " 
-                << frame_info.detection_results[i].y2 << ")" << std::endl;
-                std::cout << "=============================================\n";
-            }
-        }
+        VideoFrameData frame_info;
+	std::vector<adlink::ai::DetectionBoxResult> arr;
+        std::vector<std::string> labels = {"water bottle", "camera", "chair", "person", "slipper"};
+	std::vector<adlink::ai::DetectionBoxResult> random_boxes;
+
+	// Generate 5 random dummy boxes here
+        for ( int i = 0 ; i < 5 ; i++ )
+	{
+            adlink::ai::DetectionBoxResult temp_box;
+	    temp_box.obj_id = i+1;
+	    temp_box.obj_label = labels[i];
+	    temp_box.prob = (double)( rand() % 1000 )/1000;
+            temp_box.x1 = (double)( rand() % 3 + 1 )/10;	// 0.1~0.3
+            temp_box.x2 = (double)( rand() % 3 + 7 )/10;	// 0.7~0.9
+            temp_box.y1 = (double)( rand() % 3 + 1 )/10;	// 0.1~0.3
+            temp_box.y2 = (double)( rand() % 3 + 7 )/10;	// 0.7~0.9
+	    random_boxes.push_back(temp_box);
+	}
+
+        srand( time(NULL) );
+		
+        frame_info.stream_id = " ";
+	frame_info.width = 640;
+        frame_info.height = 480;
+        frame_info.depth = 0;
+        frame_info.channels = 3;
+        frame_info.device_idx = 0;
+        frame_info.detection_results.push_back(random_boxes[rand()%5]);
+	meta->batch.frames.push_back(frame_info);
     }
 }
 
 gboolean
-ad_get_object_detection_plugin_init(GstPlugin *plugin)
+ad_set_object_detection_plugin_init(GstPlugin *plugin)
 {
   return gst_element_register(plugin, PLUGIN_NAME, GST_RANK_NONE,
-                              AD_TYPE_GET_OBJECT_DETECTION);
+                              AD_TYPE_SET_OBJECT_DETECTION);
 }
 
 #ifndef PACKAGE
@@ -242,9 +239,9 @@ ad_get_object_detection_plugin_init(GstPlugin *plugin)
 GST_PLUGIN_DEFINE(
     GST_VERSION_MAJOR,
     GST_VERSION_MINOR,
-    adgetobjectdetection,
-    "ADLINK get object detection results from admetadata plugin",
-    ad_get_object_detection_plugin_init,
+    adsetobjectdetection,
+    "ADLINK set object detection results from admetadata plugin",
+    ad_set_object_detection_plugin_init,
     PACKAGE_VERSION,
     GST_LICENSE,
     GST_PACKAGE_NAME,
