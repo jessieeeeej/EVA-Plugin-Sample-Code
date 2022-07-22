@@ -1,3 +1,7 @@
+//**
+//   gst-launch-1.0 videotestsrc ! video/x-raw, width=640, height=480 ! adsetclassification ! admetadrawer ! videoconvert ! ximagesink
+//**
+
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -54,28 +58,6 @@ G_DEFINE_TYPE_WITH_CODE(AdSetClassification, ad_set_classification, GST_TYPE_VID
                         G_ADD_PRIVATE(AdSetClassification)
                             DEBUG_INIT)
 
-// ************************************************************
-// Required to add this gst_buffer_get_ad_batch_meta for retrieving 
-// the GstAdBatchMeta from buffer
-GstAdBatchMeta* gst_buffer_get_ad_batch_meta(GstBuffer* buffer)
-{
-    gpointer state = NULL;
-    GstMeta* meta;
-    const GstMetaInfo* info = GST_AD_BATCH_META_INFO;
-    
-    while ((meta = gst_buffer_iterate_meta (buffer, &state))) 
-    {
-        if (meta->info->api == info->api) 
-        {
-            GstAdMeta *admeta = (GstAdMeta *) meta;
-            if (admeta->type == AdBatchMeta)
-                return (GstAdBatchMeta*)meta;
-        }
-    }
-    return NULL;
-}
-// ************************************************************
-
 static void ad_set_classification_set_property(GObject *object, guint property_id, const GValue *value, GParamSpec *pspec);
 static void ad_set_classification_get_property(GObject *object, guint property_id, GValue *value, GParamSpec *pspec);
 static void ad_set_classification_dispose(GObject *object);
@@ -105,8 +87,8 @@ ad_set_classification_class_init(AdSetClassificationClass *klass)
 
   gst_element_class_set_static_metadata(gstelement_class,
                                         "Set classification result to admetadata element example", "Video/Filter",
-                                        "Example of set classification result from admetadata",
-                                        "Dr. Paul Lin <paul.lin@adlinktech.com>");
+                                        "Example of setting classification result",
+                                        "Jessie Huang <yun-chieh.huang@adlinktech.com>");
 
   // adding a pad
   gst_element_class_add_pad_template(gstelement_class,
@@ -204,7 +186,6 @@ setClassificationData(GstBuffer* buffer)
     if(!frame_exist)
     {
         VideoFrameData frame_info;
-	std::vector<adlink::ai::ClassificationResult> cls;
 	std::vector<std::string> labels = {"water bottle", "camera", "chair", "person", "slipper", "mouse", "Triceratops", "woodpecker"};
 	srand( time(NULL) );
 		
@@ -215,6 +196,12 @@ setClassificationData(GstBuffer* buffer)
 	classification.label = labels[classification.index];
 	classification.prob = (double)classification.index / labels.size();
 
+        frame_info.stream_id = " ";
+	frame_info.width = 640;
+        frame_info.height = 480;
+        frame_info.depth = 0;
+        frame_info.channels = 3;
+        frame_info.device_idx = 0;
         frame_info.class_results.push_back(classification);
 	meta->batch.frames.push_back(frame_info);
     }
