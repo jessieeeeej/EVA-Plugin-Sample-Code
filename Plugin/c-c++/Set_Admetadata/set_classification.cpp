@@ -40,6 +40,7 @@ struct _AdSetClassificationPrivate
 {
   GRecMutex mutex;
 };
+
 // pad definition
 static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE("sink",
                                                                    GST_PAD_SINK,
@@ -96,7 +97,6 @@ ad_set_classification_class_init(AdSetClassificationClass *klass)
   gst_element_class_add_pad_template(gstelement_class,
                                      gst_static_pad_template_get(&sink_factory));
 
-  // override
   gstvideofilter_class->transform_frame_ip =
       GST_DEBUG_FUNCPTR(ad_set_classification_transform_frame_ip);
 }
