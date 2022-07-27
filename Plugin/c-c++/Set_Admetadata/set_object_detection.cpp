@@ -68,6 +68,7 @@ static void setObjectDetectionData(GstBuffer* buffer);
 static void
 ad_set_object_detection_class_init(AdSetObjectDetectionClass *klass)
 {
+  // Hierarchy
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
   GstVideoFilterClass *gstvideofilter_class;
@@ -78,6 +79,7 @@ ad_set_object_detection_class_init(AdSetObjectDetectionClass *klass)
 
   GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, PLUGIN_NAME, 0, PLUGIN_NAME);
 
+  // override method
   gobject_class->set_property = ad_set_object_detection_set_property;
   gobject_class->get_property = ad_set_object_detection_get_property;
   gobject_class->dispose = ad_set_object_detection_dispose;
@@ -88,6 +90,7 @@ ad_set_object_detection_class_init(AdSetObjectDetectionClass *klass)
                                         "Example of setting object detection result",
                                         "Jessie Huang <yun-chieh.huang@adlinktech.com>");
 
+  // adding a pad
   gst_element_class_add_pad_template(gstelement_class,
                                      gst_static_pad_template_get(&src_factory));
   gst_element_class_add_pad_template(gstelement_class,
@@ -97,7 +100,7 @@ ad_set_object_detection_class_init(AdSetObjectDetectionClass *klass)
       GST_DEBUG_FUNCPTR(ad_set_object_detection_transform_frame_ip);
 }
 
-static void
+static void	// initialize instance
 ad_set_object_detection_init(AdSetObjectDetection *
                             sample_filter)
 {
@@ -185,6 +188,7 @@ setObjectDetectionData(GstBuffer* buffer)
 	std::vector<adlink::ai::DetectionBoxResult> arr;
         std::vector<std::string> labels = {"water bottle", "camera", "chair", "person", "slipper"};
 	std::vector<adlink::ai::DetectionBoxResult> random_boxes;
+        srand( time(NULL) );
 
 	// Generate 5 random dummy boxes here
         for ( int i = 0 ; i < 5 ; i++ )
@@ -200,8 +204,6 @@ setObjectDetectionData(GstBuffer* buffer)
 	    random_boxes.push_back(temp_box);
 	}
 
-        srand( time(NULL) );
-		
         frame_info.stream_id = " ";
 	frame_info.width = 640;
         frame_info.height = 480;
@@ -213,6 +215,7 @@ setObjectDetectionData(GstBuffer* buffer)
     }
 }
 
+// plugin registration
 gboolean
 ad_set_object_detection_plugin_init(GstPlugin *plugin)
 {
