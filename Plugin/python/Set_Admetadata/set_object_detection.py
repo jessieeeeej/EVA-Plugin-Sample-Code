@@ -1,251 +1,125 @@
-//**
-//   gst-launch-1.0 videotestsrc ! video/x-raw, width=640, height=480 ! adsetobjectdetection ! admetadrawer ! videoconvert ! ximagesink
-//**
+"""
+    gst-launch-1.0 videotestsrc ! video/x-raw, width=640, height=480 ! detection_sample ! admetadrawer ! videoconvert ! ximagesink
+"""
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
+import ctypes
+import numpy as np
+from random import random as rand, randint as rint
+import time
+import gst_helper
+import gst_admeta as admeta
 
-#include "adsetobjectdetection.h"
+from gi.repository import Gst, GObject, GstVideo
 
-#include <gst/gst.h>
-#include <gst/video/video.h>
-#include <gst/video/gstvideofilter.h>
-#include <glib/gstdio.h>
 
-#include <iostream>
-#include <vector>
-#include <string>
-#include <stdlib.h> // include random value function
-#include <time.h>   // include time
-#include "gstadmeta.h" // include gstadmeta.h for retrieving the inference results
+def gst_video_caps_make(fmt):
+  return  "video/x-raw, "\
+    "format = (string) " + fmt + " , "\
+    "width = " + GstVideo.VIDEO_SIZE_RANGE + ", "\
+    "height = " + GstVideo.VIDEO_SIZE_RANGE + ", "\
+    "framerate = " + GstVideo.VIDEO_FPS_RANGE
 
-#define PLUGIN_NAME "adsetobjectdetection"
 
-#define AD_SET_OBJECT_DETECTION_LOCK(sample_filter) \
-  (g_rec_mutex_lock(&((AdSetObjectDetection *)sample_filter)->priv->mutex))
+BOX_NUM = 5
+DUMMY_BOXS = [[rand(), rand(), rand(), rand()] for i in range(BOX_NUM)]
+def parse_inference_data_to_boxs(*data):
+  # Generate dummy box here, please implement your own parse algorithm with input data
+  boxs = []
+  for b in DUMMY_BOXS:
+    for j in range(len(b)):
+      b[j] += 0.01 if rint(0, 1) == 0 else -0.01
+      b[j] = max(0, b[j])
+      b[j] = min(1, b[j])
 
-#define AD_SET_OBJECT_DETECTION_UNLOCK(sample_filter) \
-  (g_rec_mutex_unlock(&((AdSetObjectDetection *)sample_filter)->priv->mutex))
+    boxs.append((max(0, min(b[0], b[1])),
+                 max(0, min(b[2], b[3])),
+                 min(1, max(b[0], b[1])),
+                 min(1, max(b[2], b[3]))))
 
-GST_DEBUG_CATEGORY_STATIC(ad_set_object_detection_debug_category);
-#define GST_CAT_DEFAULT ad_set_object_detection_debug_category
+  return boxs
 
-enum
-{
-  PROP_0
-};
+class DetectionSamplePy(Gst.Element):
 
-struct _AdSetObjectDetectionPrivate
-{
-  GRecMutex mutex;
-};
+    # MODIFIED - Gstreamer plugin name
+    GST_PLUGIN_NAME = 'detection_sample'
 
-static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE("sink",
-                                                                   GST_PAD_SINK,
-                                                                   GST_PAD_ALWAYS,
-                                                                   GST_STATIC_CAPS(GST_VIDEO_CAPS_MAKE("{ BGR }")));
+    __gstmetadata__ = ("Metadata addition",
+                       "GstElement",
+                       "Python based example for adding detection results",
+                       "Lyan Hung <lyan.hung@adlinktech.com>, Dr. Paul Lin <paul.lin@adlinktech.com>")
 
-static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE("src",
-                                                                  GST_PAD_SRC,
-                                                                  GST_PAD_ALWAYS,
-                                                                  GST_STATIC_CAPS(GST_VIDEO_CAPS_MAKE("{ BGR }")));
+    __gsttemplates__ = (Gst.PadTemplate.new("src",
+                                            Gst.PadDirection.SRC,
+                                            Gst.PadPresence.ALWAYS,
+                                            Gst.Caps.from_string(gst_video_caps_make("{ BGR }"))),
+                        Gst.PadTemplate.new("sink",
+                                            Gst.PadDirection.SINK,
+                                            Gst.PadPresence.ALWAYS,
+                                            Gst.Caps.from_string(gst_video_caps_make("{ BGR }"))))
 
-#define DEBUG_INIT \
-  GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, PLUGIN_NAME, 0, "debug category for set object detection element");
+    _sinkpadtemplate = __gsttemplates__[1]
+    _srcpadtemplate = __gsttemplates__[0]
 
-G_DEFINE_TYPE_WITH_CODE(AdSetObjectDetection, ad_set_object_detection, GST_TYPE_VIDEO_FILTER,
-                        G_ADD_PRIVATE(AdSetObjectDetection)
-                            DEBUG_INIT)
-
-static void ad_set_object_detection_set_property(GObject *object, guint property_id, const GValue *value, GParamSpec *pspec);
-static void ad_set_object_detection_get_property(GObject *object, guint property_id, GValue *value, GParamSpec *pspec);
-static void ad_set_object_detection_dispose(GObject *object);
-static void ad_set_object_detection_finalize(GObject *object);
-static GstFlowReturn ad_set_object_detection_transform_frame_ip(GstVideoFilter *filter, GstVideoFrame *frame);
-static void setObjectDetectionData(GstBuffer* buffer);
-
-static void
-ad_set_object_detection_class_init(AdSetObjectDetectionClass *klass)
-{
-  // Hierarchy
-  GObjectClass *gobject_class;
-  GstElementClass *gstelement_class;
-  GstVideoFilterClass *gstvideofilter_class;
-
-  gobject_class = (GObjectClass *)klass;
-  gstvideofilter_class = (GstVideoFilterClass *)klass;
-  gstelement_class = (GstElementClass *)klass;
-
-  GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, PLUGIN_NAME, 0, PLUGIN_NAME);
-
-  // override method
-  gobject_class->set_property = ad_set_object_detection_set_property;
-  gobject_class->get_property = ad_set_object_detection_get_property;
-  gobject_class->dispose = ad_set_object_detection_dispose;
-  gobject_class->finalize = ad_set_object_detection_finalize;
-
-  gst_element_class_set_static_metadata(gstelement_class,
-                                        "Set object detection result element example", "Video/Filter",
-                                        "Example of setting object detection result",
-                                        "Jessie Huang <yun-chieh.huang@adlinktech.com>");
-
-  // adding a pad
-  gst_element_class_add_pad_template(gstelement_class,
-                                     gst_static_pad_template_get(&src_factory));
-  gst_element_class_add_pad_template(gstelement_class,
-                                     gst_static_pad_template_get(&sink_factory));
-
-  gstvideofilter_class->transform_frame_ip =
-      GST_DEBUG_FUNCPTR(ad_set_object_detection_transform_frame_ip);
-}
-
-static void	// initialize instance
-ad_set_object_detection_init(AdSetObjectDetection *
-                            sample_filter)
-{
-  sample_filter->priv = (AdSetObjectDetectionPrivate *)ad_set_object_detection_get_instance_private(sample_filter);
-
-  g_rec_mutex_init(&sample_filter->priv->mutex);
-}
-
-static void
-ad_set_object_detection_set_property(GObject *object, guint property_id,
-                                const GValue *value, GParamSpec *pspec)
-{
-  AdSetObjectDetection *sample_filter = AD_SET_OBJECT_DETECTION(object);
-
-  AD_SET_OBJECT_DETECTION_LOCK(sample_filter);
-
-  switch (property_id)
-  {
-  default:
-    G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
-    break;
-  }
-
-  AD_SET_OBJECT_DETECTION_UNLOCK(sample_filter);
-}
-
-static void
-ad_set_object_detection_get_property(GObject *object, guint property_id,
-                                GValue *value, GParamSpec *pspec)
-{
-  AdSetObjectDetection *sample_filter = AD_SET_OBJECT_DETECTION(object);
-
-  AD_SET_OBJECT_DETECTION_LOCK(sample_filter);
-
-  switch (property_id)
-  {
-  default:
-    G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
-    break;
-  }
-
-  AD_SET_OBJECT_DETECTION_UNLOCK(sample_filter);
-}
-
-static void
-ad_set_object_detection_dispose(GObject *object)
-{
-}
-
-static void
-ad_set_object_detection_finalize(GObject *object)
-{
-  AdSetObjectDetection *sample_filter = AD_SET_OBJECT_DETECTION(object);
-
-  g_rec_mutex_clear(&sample_filter->priv->mutex);
-}
-
-static GstFlowReturn
-ad_set_object_detection_transform_frame_ip(GstVideoFilter *filter,
-                                      GstVideoFrame *frame)
-{
-  GstMapInfo info;
-
-  gst_buffer_map(frame->buffer, &info, GST_MAP_READ);
-  
-  // Set object detection
-  setObjectDetectionData(frame->buffer);
-
-  gst_buffer_unmap(frame->buffer, &info);
-  return GST_FLOW_OK;
-}
-
-static void 
-setObjectDetectionData(GstBuffer* buffer)
-{
-    gpointer state = NULL;
-    GstAdBatchMeta* meta;
-    const GstMetaInfo* info = GST_AD_BATCH_META_INFO;
-    meta = (GstAdBatchMeta *)gst_buffer_add_meta(buffer, info, &state);
-        
-    bool frame_exist = meta->batch.frames.size() > 0 ? true : false;
-    if(!frame_exist)
-    {
-        VideoFrameData frame_info;
-	std::vector<adlink::ai::DetectionBoxResult> arr;
-        std::vector<std::string> labels = {"water bottle", "camera", "chair", "person", "slipper"};
-	std::vector<adlink::ai::DetectionBoxResult> random_boxes;
-        srand( time(NULL) );
-
-	// Generate 5 random dummy boxes here
-        for ( int i = 0 ; i < 5 ; i++ )
-	{
-            adlink::ai::DetectionBoxResult temp_box;
-	    temp_box.obj_id = i+1;
-	    temp_box.obj_label = labels[i];
-	    temp_box.prob = (double)( rand() % 1000 )/1000;
-            temp_box.x1 = (double)( rand() % 3 + 1 )/10;	// 0.1~0.3
-            temp_box.x2 = (double)( rand() % 3 + 7 )/10;	// 0.7~0.9
-            temp_box.y1 = (double)( rand() % 3 + 1 )/10;	// 0.1~0.3
-            temp_box.y2 = (double)( rand() % 3 + 7 )/10;	// 0.7~0.9
-	    random_boxes.push_back(temp_box);
-	}
-
-        frame_info.stream_id = " ";
-	frame_info.width = 640;
-        frame_info.height = 480;
-        frame_info.depth = 0;
-        frame_info.channels = 3;
-        frame_info.device_idx = 0;
-        frame_info.detection_results.push_back(random_boxes[rand()%5]);
-	meta->batch.frames.push_back(frame_info);
+    # MODIFIED - Gstreamer plugin properties
+    __gproperties__ = {
     }
-}
 
-// plugin registration
-gboolean
-ad_set_object_detection_plugin_init(GstPlugin *plugin)
-{
-  return gst_element_register(plugin, PLUGIN_NAME, GST_RANK_NONE,
-                              AD_TYPE_SET_OBJECT_DETECTION);
-}
+    def __init__(self):
+      self.boxes = parse_inference_data_to_boxs()
+      self.duration = 2
+      self.time = time.time()
+      
+      super(DetectionSamplePy, self).__init__()
 
-#ifndef PACKAGE
-#define PACKAGE "SAMPLE"
-#endif
-#ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION "1.0"
-#endif
-#ifndef GST_PACKAGE_NAME
-#define GST_PACKAGE_NAME "Sample Package"
-#endif
-#ifndef GST_LICENSE
-#define GST_LICENSE "LGPL"
-#endif
-#ifndef GST_PACKAGE_ORIGIN
-#define GST_PACKAGE_ORIGIN "https://www.adlink.com"
-#endif
+      self.sinkpad = Gst.Pad.new_from_template(self._sinkpadtemplate, 'sink')
+      self.sinkpad.set_chain_function_full(self.chainfunc, None)
+      self.sinkpad.set_chain_list_function_full(self.chainlistfunc, None)
+      self.sinkpad.set_event_function_full(self.eventfunc, None)
+      self.add_pad(self.sinkpad)
+      self.srcpad = Gst.Pad.new_from_template(self._srcpadtemplate, 'src')
+      self.add_pad(self.srcpad)
 
-GST_PLUGIN_DEFINE(
-    GST_VERSION_MAJOR,
-    GST_VERSION_MINOR,
-    adsetobjectdetection,
-    "ADLINK set object detection results from admetadata plugin",
-    ad_set_object_detection_plugin_init,
-    PACKAGE_VERSION,
-    GST_LICENSE,
-    GST_PACKAGE_NAME,
-    GST_PACKAGE_ORIGIN)
+
+    def do_get_property(self, prop: GObject.GParamSpec):
+      raise AttributeError('unknown property %s' % prop.name)
+
+    def do_set_property(self, prop: GObject.GParamSpec, value):
+      raise AttributeError('unknown property %s' % prop.name)
+
+    def eventfunc(self, pad: Gst.Pad, parent, event: Gst.Event) -> bool:
+      return self.srcpad.push_event(event)
+
+    def chainfunc(self, pad: Gst.Pad, parent, buff: Gst.Buffer) -> Gst.FlowReturn:
+      ##################
+      #     BEGINE     #
+      ##################
+
+      arr = []
+      # Change random data every self.duration time
+      if time.time() - self.time > self.duration:
+          self.boxes = parse_inference_data_to_boxs()
+          self.time = time.time()
+          
+      for i, box in enumerate(self.boxes):
+          arr.append(admeta._DetectionBox(i, i, i, i,
+                                          box[0],
+                                          box[1],
+                                          box[2],
+                                          box[3],
+                                          rand()))
+      ##################
+      #      END       #
+      ##################
+
+      # Set data into admetadata
+      admeta.set_detection_box(buff, pad, arr)
+      
+      return self.srcpad.push(buff)
+      
+    def chainlistfunc(self, pad: Gst.Pad, parent, list: Gst.BufferList) -> Gst.FlowReturn:
+      return self.srcpad.push(list.get(0))
+
+# Register plugin to use it from command line
+GObject.type_register(DetectionSamplePy)
+__gstelementfactory__ = (DetectionSamplePy.GST_PLUGIN_NAME,
+                         Gst.Rank.NONE, DetectionSamplePy)
