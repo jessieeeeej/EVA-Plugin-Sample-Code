@@ -67,7 +67,7 @@ if __name__ == '__main__':
     ## element: videoconvert
     videoconvert = Gst.ElementFactory.make("videoconvert", "videoconvert")
 
-    ## element: appsink
+    ## element: ximagesink
     sink = Gst.ElementFactory.make("ximagesink", "sink")
     
     # Create the empty pipeline
