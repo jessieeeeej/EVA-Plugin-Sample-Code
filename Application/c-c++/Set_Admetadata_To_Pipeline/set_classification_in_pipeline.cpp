@@ -43,7 +43,6 @@ static void establish_thread_pipeline()
     classifier = gst_element_factory_make ("adsetclassification", "classifier");
     drawer = gst_element_factory_make("admetadrawer", "drawer");
     videoconvert = gst_element_factory_make("videoconvert", "videoconvert");
-    //appsink = gst_element_factory_make ("appsink", "appsink");
     ximagesink = gst_element_factory_make("ximagesink", "ximagesink");
 
     /* setup filtercaps*/
