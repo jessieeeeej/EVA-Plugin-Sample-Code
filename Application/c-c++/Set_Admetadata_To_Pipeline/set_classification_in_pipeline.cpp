@@ -1,6 +1,6 @@
 // **
 // Demo senario: 
-// gst-launch-1.0 videotestsrc ! video/x-raw, format=BGR, width=640, height=480, framerate=30/1 ! adsetclassification ! admetadrawer ! videoconvert ! appsink
+// gst-launch-1.0 videotestsrc ! video/x-raw, format=BGR, width=640, height=480, framerate=30/1 ! adsetclassification ! admetadrawer ! videoconvert ! ximagesink
 
 // This example only show how to get adlink metadata from appsink.
 // So this example does not deal with any other detail concern about snchronize or other tasks.
@@ -23,72 +23,6 @@ static GMainLoop *loop;
 GstElement *pipeline, *videotestsrc, *filtercaps, *classifier, *drawer, *videoconvert, *appsink, *ximagesink;
 vector<Mat> pipeLineOutputVec;
 cv::Mat img(cv::Size(640, 480), CV_8UC3);
-
-GstAdBatchMeta* gst_buffer_get_ad_batch_meta(GstBuffer* buffer)
-{
-    gpointer state = NULL;
-    GstMeta* meta;
-    const GstMetaInfo* info = GST_AD_BATCH_META_INFO;
-    
-    while ((meta = gst_buffer_iterate_meta (buffer, &state))) 
-    {
-        if (meta->info->api == info->api) 
-        {
-            GstAdMeta *admeta = (GstAdMeta *) meta;
-            if (admeta->type == AdBatchMeta)
-                return (GstAdBatchMeta*)meta;
-        }
-    }
-    return NULL;
-}
-
-static GstFlowReturn new_sample(GstElement *sink, gpointer *udata) 
-{
-    GstSample *sample;
-
-    g_signal_emit_by_name (sink, "pull-sample", &sample);
-    if (sample) 
-    {
-        GstMapInfo map;
-        guint size = 640 * 480 * 3;
-        GstBuffer *buffer = gst_buffer_new_allocate (NULL, size, NULL);
-        
-        buffer = gst_sample_get_buffer (sample);
-        
-        gst_buffer_map(buffer, &map, GST_MAP_READ);
-        
-        GstAdBatchMeta *meta = gst_buffer_get_ad_batch_meta(buffer);
-        if(meta != NULL)
-        {
-            AdBatch &batch = meta->batch; 
-            VideoFrameData frame_info = batch.frames[0];
-            int classificationResultNumber = frame_info.class_results.size();
-            cout << "classification result number = " << classificationResultNumber << endl;
-            for(int i = 0 ; i < classificationResultNumber ; ++i)
-            {
-                cout << "========== metadata in application ==========\n";
-                cout << "Class = " << frame_info.class_results[i].index << endl;
-                cout << "Label = " << frame_info.class_results[i].label << endl;
-                cout << "output =  " << frame_info.class_results[i].output << endl;
-                cout << "Prob =  " << frame_info.class_results[i].prob << endl;
-                cout << "=============================================\n";
-            }
-        }
-        
-        memcpy(img.data, (guchar *)map.data, gst_buffer_get_size(buffer));
-        pipeLineOutputVec.push_back(img.clone());
-        
-        gst_buffer_unmap(buffer, &map);
-        
-        gst_sample_unref (sample);
-        this_thread::sleep_for(chrono::milliseconds(1));
-        return GST_FLOW_OK;
-    }
-    
-    return GST_FLOW_ERROR;
-}
-
-
 
 static void free_pipeline()
 {
@@ -119,10 +53,6 @@ static void establish_thread_pipeline()
                                        "framerate", GST_TYPE_FRACTION, 30, 1, NULL), NULL);
     gst_bin_add_many (GST_BIN (pipeline), videotestsrc, filtercaps, classifier, drawer, videoconvert, ximagesink, NULL);
     gst_element_link_many (videotestsrc, filtercaps, classifier, drawer, videoconvert, ximagesink, NULL);
-
-    /* setup appsink */
-    //g_object_set (G_OBJECT(appsink), "emit-signals", TRUE, NULL);
-    //g_signal_connect (appsink, "new-sample", G_CALLBACK (new_sample), NULL);
     
     /* play */
     gst_element_set_state (pipeline, GST_STATE_PLAYING);
