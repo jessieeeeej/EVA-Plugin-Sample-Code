@@ -54,7 +54,9 @@ Second, in the virtual method, ad_set_classification_transform_frame_ip, of this
     }
 
 The metadata structure could be find in Edge Vision Analytics SDK Programming Guide : How to Use ADLINK Metadata in Chapter 5. Or can be found in the files:
+
 •	EVA_INSTALL_ROOT/include/gstadmeta.h
+
 •	EVA_INSTALL_ROOT/include/libs/ai/structure.h
 
 Based on the structure, the frame in vector and the inferenced data are stored in each frame need to be set up. When data in this element is empty, we’ll randomly generate the inference data and set data into the classification result. The simulated result will be set into adbatchmetadata with frame information.
