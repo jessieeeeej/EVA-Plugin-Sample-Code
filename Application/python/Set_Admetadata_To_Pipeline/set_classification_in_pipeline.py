@@ -4,15 +4,12 @@
 
 ## This example only show how to set adlink metadata.
 ## So this example does not deal with any other detail concern about snchronize or other tasks.
-## Only show how to retrieve the adlink metdata for user who is interested with them.
+## Only show how to set the adlink metdata for user who is interested with them.
 ## **
-
-# Have to install Python plugin classifier_sample.py file to the plugin folder first.
 import sys
 import time
 import numpy
-import random
-from queue import Queue
+
 # Required to import to set ADLINK inference metadata
 import gst_admeta as admeta
 
@@ -21,43 +18,6 @@ import gi
 gi.require_version('Gst', '1.0')
 
 from gi.repository import Gst, GObject
-
-def extract_data(sample):
-    buf = sample.get_buffer()
-    caps = sample.get_caps()
-    
-    arr = numpy.ndarray(
-        (caps.get_structure(0).get_value('height'),
-         caps.get_structure(0).get_value('width'),
-         3),
-        buffer=buf.extract_dup(0, buf.get_size()),
-        dtype=numpy.uint8)
-    return arr
-
-def new_sample(sink, data) -> Gst.FlowReturn:
-    sample = sink.emit('pull-sample')
-    
-    # get image data and save as bmp file
-    arr = extract_data(sample)
-    cv2.imwrite("a.bmp", arr.copy())
-    
-    # get classification inference result
-    buf = sample.get_buffer()
-    classification_results = admeta.get_classification(buf,0)
-    with classification_results as results:
-        if results is not None:
-            for r in results:                
-                print('**********************')
-                print('classification result:')
-                print('id = ', r.index)
-                print('output = ', r.output.decode("utf-8").strip())
-                print('label = ', r.label.decode("utf-8").strip())
-                print('prob = {:.3f}'.format(r.prob))
-        else:
-            print("None")
-            
-    time.sleep(0.01)
-    return Gst.FlowReturn.OK
 
 def on_message(bus: Gst.Bus, message: Gst.Message, loop: GObject.MainLoop):
     mtype = message.type
@@ -96,7 +56,7 @@ if __name__ == '__main__':
     
     ## element: capsfilter
     filtercaps = Gst.ElementFactory.make("capsfilter", "filtercaps")
-    filtercaps.set_property("caps", Gst.Caps.from_string("video/x-raw, format=BGR, width=320, height=240"))
+    filtercaps.set_property("caps", Gst.Caps.from_string("video/x-raw, format=BGR, width=640, height=480"))
 
     ## element: classifier_sample
     classifier = Gst.ElementFactory.make("classifier_sample", "classifier")
@@ -108,9 +68,7 @@ if __name__ == '__main__':
     videoconvert = Gst.ElementFactory.make("videoconvert", "videoconvert")
 
     ## element: appsink
-    sink = Gst.ElementFactory.make("appsink", "sink")
-    sink.set_property('emit-signals', True)
-    sink.connect('new-sample', new_sample, None)
+    sink = Gst.ElementFactory.make("ximagesink", "sink")
     
     # Create the empty pipeline
     pipeline = Gst.Pipeline().new("test-pipeline")
