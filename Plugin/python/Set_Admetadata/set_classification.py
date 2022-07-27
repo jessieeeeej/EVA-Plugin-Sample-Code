@@ -1,99 +1,243 @@
-"""
-    gst-launch-1.0 videotestsrc ! video/x-raw, width=640, height=480 ! classifier_sample ! admetadrawer ! videoconvert ! ximagesink
-"""
+//**
+//   gst-launch-1.0 videotestsrc ! video/x-raw, width=640, height=480 ! adsetclassification ! admetadrawer ! videoconvert ! ximagesink
+//**
 
-import ctypes
-import numpy as np
-import random
-import time
-import gst_helper
-import gst_admeta as admeta
-from gi.repository import Gst, GObject, GstVideo
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
+#include "adsetclassification.h"
 
-def gst_video_caps_make(fmt):
-  return  "video/x-raw, "\
-    "format = (string) " + fmt + " , "\
-    "width = " + GstVideo.VIDEO_SIZE_RANGE + ", "\
-    "height = " + GstVideo.VIDEO_SIZE_RANGE + ", "\
-    "framerate = " + GstVideo.VIDEO_FPS_RANGE
+#include <gst/gst.h>
+#include <gst/video/video.h>
+#include <gst/video/gstvideofilter.h>
+#include <glib/gstdio.h>
 
+#include <iostream>
+#include <vector>
+#include <string>
+#include <stdlib.h> // include random value function
+#include <time.h>   // include time
+#include "gstadmeta.h" // include gstadmeta.h for retrieving the inference results
 
-class ClassifierSamplePy(Gst.Element):
-    # MODIFIED - Gstreamer plugin name
-    GST_PLUGIN_NAME = 'classifier_sample'
+#define PLUGIN_NAME "adsetclassification"
 
-    __gstmetadata__ = ("Metadata addition",
-                       "GstElement",
-                       "Python based example for adding classification results",
-                       "Lyan Hung <lyan.hung@adlinktech.com>, Dr. Paul Lin <paul.lin@adlinktech.com>")
+#define AD_SET_CLASSIFICATION_LOCK(sample_filter) \
+  (g_rec_mutex_lock(&((AdSetClassification *)sample_filter)->priv->mutex))
 
-    __gsttemplates__ = (Gst.PadTemplate.new("src",
-                                            Gst.PadDirection.SRC,
-                                            Gst.PadPresence.ALWAYS,
-                                            Gst.Caps.from_string(gst_video_caps_make("{ BGR }"))),
-                        Gst.PadTemplate.new("sink",
-                                            Gst.PadDirection.SINK,
-                                            Gst.PadPresence.ALWAYS,
-                                            Gst.Caps.from_string(gst_video_caps_make("{ BGR }"))))
+#define AD_SET_CLASSIFICATION_UNLOCK(sample_filter) \
+  (g_rec_mutex_unlock(&((AdSetClassification *)sample_filter)->priv->mutex))
 
-    _sinkpadtemplate = __gsttemplates__[1]
-    _srcpadtemplate = __gsttemplates__[0]
+GST_DEBUG_CATEGORY_STATIC(ad_set_classification_debug_category);
+#define GST_CAT_DEFAULT ad_set_classification_debug_category
 
-    def __init__(self):
-      # MODIFIED - Setting gstreamer plugin properties default value
-      # Note - Initialize properties before Base Class initialization
-      self.labels = ['water bottle', 'camera', 'chair', 'person', 'slipper', 'mouse', 'Triceratops', 'woodpecker']
-      self.duration = 2
-      self.time = time.time()
-      self.class_id = 0
-      self.class_prob = 0.5
+enum
+{
+  PROP_0
+};
 
-      super(ClassifierSamplePy, self).__init__()
+struct _AdSetClassificationPrivate
+{
+  GRecMutex mutex;
+};
 
-      self.sinkpad = Gst.Pad.new_from_template(self._sinkpadtemplate, 'sink')
-      self.sinkpad.set_chain_function_full(self.chainfunc, None)
-      self.sinkpad.set_chain_list_function_full(self.chainlistfunc, None)
-      self.sinkpad.set_event_function_full(self.eventfunc, None)
-      self.add_pad(self.sinkpad)
-      self.srcpad = Gst.Pad.new_from_template(self._srcpadtemplate, 'src')
-      self.add_pad(self.srcpad)
+// pad definition
+static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE("sink",
+                                                                   GST_PAD_SINK,
+                                                                   GST_PAD_ALWAYS,
+                                                                   GST_STATIC_CAPS(GST_VIDEO_CAPS_MAKE("{ BGR }")));
 
-    def do_get_property(self, prop: GObject.GParamSpec):
-        raise AttributeError('unknown property %s' % prop.name)
+static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE("src",
+                                                                  GST_PAD_SRC,
+                                                                  GST_PAD_ALWAYS,
+                                                                  GST_STATIC_CAPS(GST_VIDEO_CAPS_MAKE("{ BGR }")));
 
-    def do_set_property(self, prop: GObject.GParamSpec, value):
-        raise AttributeError('unknown property %s' % prop.name)
+#define DEBUG_INIT \
+  GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, PLUGIN_NAME, 0, "debug category for set classification element");
 
-    def eventfunc(self, pad: Gst.Pad, parent, event: Gst.Event) -> bool:
-      return self.srcpad.push_event(event)
+G_DEFINE_TYPE_WITH_CODE(AdSetClassification, ad_set_classification, GST_TYPE_VIDEO_FILTER,
+                        G_ADD_PRIVATE(AdSetClassification)
+                            DEBUG_INIT)
 
-    def chainfunc(self, pad: Gst.Pad, parent, buff: Gst.Buffer) -> Gst.FlowReturn:
-      ##################
-      #     BEGINE     #
-      ##################
-      
-      cls = []
-      # Change random data every self.duration time
-      if time.time() - self.time > self.duration:
-          self.class_id = random.randrange(len(self.labels))
-          self.class_prob = random.uniform(0, 1)
-          self.time = time.time()
-      
-      cls.append(admeta._Classification(self.class_id, '', self.labels[self.class_id], self.class_prob))
-      
-      ##################
-      #      END       #
-      ##################
-      
-      # Set data into admetadata
-      admeta.set_classification(buff, pad, cls)
-      return self.srcpad.push(buff)
+static void ad_set_classification_set_property(GObject *object, guint property_id, const GValue *value, GParamSpec *pspec);
+static void ad_set_classification_get_property(GObject *object, guint property_id, GValue *value, GParamSpec *pspec);
+static void ad_set_classification_dispose(GObject *object);
+static void ad_set_classification_finalize(GObject *object);
+static GstFlowReturn ad_set_classification_transform_frame_ip(GstVideoFilter *filter, GstVideoFrame *frame);
+static void setClassificationData(GstBuffer* buffer);
 
-    def chainlistfunc(self, pad: Gst.Pad, parent, list: Gst.BufferList) -> Gst.FlowReturn:
-      return self.srcpad.push(list.get(0))
+static void     // initialize metadata
+ad_set_classification_class_init(AdSetClassificationClass *klass)
+{
+  // Hierarchy
+  GObjectClass *gobject_class;
+  GstElementClass *gstelement_class;
+  GstVideoFilterClass *gstvideofilter_class;
 
-# Register plugin to use it from command line
-GObject.type_register(ClassifierSamplePy)
-__gstelementfactory__ = (ClassifierSamplePy.GST_PLUGIN_NAME,
-                         Gst.Rank.NONE, ClassifierSamplePy)
+  gobject_class = (GObjectClass *)klass;
+  gstvideofilter_class = (GstVideoFilterClass *)klass;
+  gstelement_class = (GstElementClass *)klass;
+
+  GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, PLUGIN_NAME, 0, PLUGIN_NAME);
+
+  // override method
+  gobject_class->set_property = ad_set_classification_set_property;
+  gobject_class->get_property = ad_set_classification_get_property;
+  gobject_class->dispose = ad_set_classification_dispose;
+  gobject_class->finalize = ad_set_classification_finalize;
+
+  gst_element_class_set_static_metadata(gstelement_class,
+                                        "Set classification result to admetadata element example", "Video/Filter",
+                                        "Example of setting classification result",
+                                        "Jessie Huang <yun-chieh.huang@adlinktech.com>");
+
+  // adding a pad
+  gst_element_class_add_pad_template(gstelement_class,
+                                     gst_static_pad_template_get(&src_factory));
+  gst_element_class_add_pad_template(gstelement_class,
+                                     gst_static_pad_template_get(&sink_factory));
+
+  gstvideofilter_class->transform_frame_ip =
+      GST_DEBUG_FUNCPTR(ad_set_classification_transform_frame_ip);
+}
+
+static void     // initialize instance
+ad_set_classification_init(AdSetClassification *
+                            sample_filter)
+{
+  sample_filter->priv = (AdSetClassificationPrivate *)ad_set_classification_get_instance_private(sample_filter);
+
+  g_rec_mutex_init(&sample_filter->priv->mutex);
+}
+
+static void
+ad_set_classification_set_property(GObject *object, guint property_id,
+                                const GValue *value, GParamSpec *pspec)
+{
+  AdSetClassification *sample_filter = AD_SET_CLASSIFICATION(object);
+
+  AD_SET_CLASSIFICATION_LOCK(sample_filter);
+
+  switch (property_id)
+  {
+  default:
+    G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
+    break;
+  }
+
+  AD_SET_CLASSIFICATION_UNLOCK(sample_filter);
+}
+
+static void
+ad_set_classification_get_property(GObject *object, guint property_id,
+                                GValue *value, GParamSpec *pspec)
+{
+  AdSetClassification *sample_filter = AD_SET_CLASSIFICATION(object);
+
+  AD_SET_CLASSIFICATION_LOCK(sample_filter);
+
+  switch (property_id)
+  {
+  default:
+    G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
+    break;
+  }
+
+  AD_SET_CLASSIFICATION_UNLOCK(sample_filter);
+}
+
+static void
+ad_set_classification_dispose(GObject *object)
+{
+}
+
+static void
+ad_set_classification_finalize(GObject *object)
+{
+  AdSetClassification *sample_filter = AD_SET_CLASSIFICATION(object);
+
+  g_rec_mutex_clear(&sample_filter->priv->mutex);
+}
+
+static GstFlowReturn
+ad_set_classification_transform_frame_ip(GstVideoFilter *filter,
+                                      GstVideoFrame *frame)
+{
+  GstMapInfo info;
+
+  gst_buffer_map(frame->buffer, &info, GST_MAP_READ);
+  
+  // Set classification
+  setClassificationData(frame->buffer);
+
+  gst_buffer_unmap(frame->buffer, &info);
+  return GST_FLOW_OK;
+}
+
+static void 
+setClassificationData(GstBuffer* buffer)
+{
+    gpointer state = NULL;
+    GstAdBatchMeta* meta;
+    const GstMetaInfo* info = GST_AD_BATCH_META_INFO;
+    meta = (GstAdBatchMeta *)gst_buffer_add_meta(buffer, info, &state);
+        
+    bool frame_exist = meta->batch.frames.size() > 0 ? true : false;
+    if(!frame_exist)
+    {
+        VideoFrameData frame_info;
+	std::vector<std::string> labels = {"water bottle", "camera", "chair", "person", "slipper", "mouse", "Triceratops", "woodpecker"};
+	srand( time(NULL) );
+		
+	// Create random labels
+	adlink::ai::ClassificationResult classification;
+	classification.index = (rand() % labels.size());
+	classification.output = "";
+	classification.label = labels[classification.index];
+	classification.prob = (double)classification.index / labels.size();
+
+        frame_info.stream_id = " ";
+	frame_info.width = 640;
+        frame_info.height = 480;
+        frame_info.depth = 0;
+        frame_info.channels = 3;
+        frame_info.device_idx = 0;
+        frame_info.class_results.push_back(classification);
+	meta->batch.frames.push_back(frame_info);
+    }
+}
+
+// plugin registration
+gboolean      
+ad_set_classification_plugin_init(GstPlugin *plugin)
+{
+  return gst_element_register(plugin, PLUGIN_NAME, GST_RANK_NONE,
+                              AD_TYPE_SET_CLASSIFICATION);
+}
+
+#ifndef PACKAGE
+#define PACKAGE "SAMPLE"
+#endif
+#ifndef PACKAGE_VERSION
+#define PACKAGE_VERSION "1.0"
+#endif
+#ifndef GST_PACKAGE_NAME
+#define GST_PACKAGE_NAME "Sample Package"
+#endif
+#ifndef GST_LICENSE
+#define GST_LICENSE "LGPL"
+#endif
+#ifndef GST_PACKAGE_ORIGIN
+#define GST_PACKAGE_ORIGIN "https://www.adlink.com"
+#endif
+
+GST_PLUGIN_DEFINE(
+    GST_VERSION_MAJOR,
+    GST_VERSION_MINOR,
+    adsetclassification,
+    "ADLINK set classification results from admetadata plugin",
+    ad_set_classification_plugin_init,
+    PACKAGE_VERSION,
+    GST_LICENSE,
+    GST_PACKAGE_NAME,
+    GST_PACKAGE_ORIGIN)
