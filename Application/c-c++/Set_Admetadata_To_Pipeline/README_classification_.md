@@ -52,9 +52,9 @@ shown in the code fragment below:
 
         /* setup appsrc*/
         g_object_set (G_OBJECT (appsrc), "caps",
-                      gst_caps_new_simple ("video/x-raw", "format", G_TYPE_STRING, "BGR",
-                                           "width", G_TYPE_INT, 640, "height", G_TYPE_INT, 480,
-                                           "framerate", GST_TYPE_FRACTION, 30, 1,NULL), NULL);
+        gst_caps_new_simple ("video/x-raw", "format", G_TYPE_STRING, "BGR",
+                                            "width", G_TYPE_INT, 640, "height", G_TYPE_INT, 480,
+                                            "framerate", GST_TYPE_FRACTION, 30, 1,NULL), NULL);
 
         gst_bin_add_many (GST_BIN (pipeline), appsrc, drawer, videoconvert, ximagesink, NULL);
         gst_element_link_many (appsrc, drawer, videoconvert, ximagesink, NULL);
