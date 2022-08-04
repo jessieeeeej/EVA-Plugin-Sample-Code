@@ -2,7 +2,9 @@
 
 Through this sample code, you can learn:
 1.	Set detection results into admetadata.
-Essential knowledge
+
+## Essential knowledge
+
 1.	Plugin sample code, "video filtr", in C/C++.
 2.	The difference between application code and plugin/element code.
 3.	ADLINK metadata structure. The metadata structure could be find in Edge Vision Analytics SDK Programming Guide: How to Use ADLINK Metadata in Chapter 5.
@@ -61,10 +63,13 @@ Second, in the virtual method, ad_set_object_detection_transform_frame_ip, of th
         frame_info.detection_results.push_back(random_boxes[rand()%5]);
         meta->batch.frames.push_back(frame_info);
     }
+    
 The metadata structure could be find in Edge Vision Analytics SDK Programming Guide : How to Use ADLINK Metadata in Chapter 5. Or can be found in the files:
+
 •	EVA_INSTALL_ROOT/include/gstadmeta.h
+
 •	EVA_INSTALL_ROOT/include/libs/ai/structure.h
-Based on the structure, the frame in vector and the inferenced data are stored in each frame need to be set up. When data in this element is empty, we’ll just randomly generate the inference data and set data into the detection result. The simulated result will be set into adbatchmetadata with frame information.
+Based on the structure, AdBatchMeta can set the frame and the inferenced data which stored in each frame based on classification, detection, segmentation or openpose. When the meta data of the buffer is empty, we’ll randomly generate the inference data and set data into the detection result. The simulated result will be set into adbatchmetadata with frame information.
 
 ## Run this sample code
 
