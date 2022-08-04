@@ -110,28 +110,28 @@ After setting the appsrc property "cap", "blocksize" to the format we are going 
         {
             VideoFrameData frame_info;
             std::vector<std::string> labels = {"water bottle", "camera", "chair", "person", "slipper"};
-      std::vector<adlink::ai::DetectionBoxResult> random_boxes;
+            std::vector<adlink::ai::DetectionBoxResult> random_boxes;
             srand( time(NULL) );
-
-      // Generate random dummy boxes here
-      adlink::ai::DetectionBoxResult random_box;
-      int i = rand() % 5;
-      random_box.obj_id = i;
-      random_box.obj_label = labels[i];
-      random_box.prob = (double)( rand() % 1000 )/1000;
-      random_box.x1 = (double)( rand() % 3 + 1 )/10;	// 0.1~0.3
-      random_box.x2 = (double)( rand() % 3 + 7 )/10;	// 0.7~0.9
-      random_box.y1 = (double)( rand() % 3 + 1 )/10;	// 0.1~0.3
-      random_box.y2 = (double)( rand() % 3 + 7 )/10;	// 0.7~0.9
-
-      frame_info.stream_id = " ";
-      frame_info.width = cols;
-      frame_info.height = rows;
-      frame_info.depth = depth;
-      frame_info.channels = channels;
-      frame_info.device_idx = 0;
+            
+            // Generate random dummy boxes here
+            adlink::ai::DetectionBoxResult random_box;
+            int i = rand() % 5;
+            random_box.obj_id = i;
+            random_box.obj_label = labels[i];
+            random_box.prob = (double)( rand() % 1000 )/1000;
+            random_box.x1 = (double)( rand() % 3 + 1 )/10;	// 0.1~0.3
+            random_box.x2 = (double)( rand() % 3 + 7 )/10;	// 0.7~0.9
+            random_box.y1 = (double)( rand() % 3 + 1 )/10;	// 0.1~0.3
+            random_box.y2 = (double)( rand() % 3 + 7 )/10;	// 0.7~0.9
+            
+            frame_info.stream_id = " ";
+            frame_info.width = cols;
+            frame_info.height = rows;
+            frame_info.depth = depth;
+            frame_info.channels = channels;
+            frame_info.device_idx = 0;
             frame_info.detection_results.push_back(random_box);
-      meta->batch.frames.push_back(frame_info);
+            meta->batch.frames.push_back(frame_info);
         }
 
         g_signal_emit_by_name (appsrc, "push-buffer", buffer, &ret);
