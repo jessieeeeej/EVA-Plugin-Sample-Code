@@ -69,6 +69,7 @@ The metadata structure could be find in Edge Vision Analytics SDK Programming Gu
 •	EVA_INSTALL_ROOT/include/gstadmeta.h
 
 •	EVA_INSTALL_ROOT/include/libs/ai/structure.h
+
 Based on the structure, AdBatchMeta can set the frame and the inferenced data which stored in each frame based on classification, detection, segmentation or openpose. When the meta data of the buffer is empty, we’ll randomly generate the inference data and set data into the detection result. The simulated result will be set into adbatchmetadata with frame information.
 
 ## Run this sample code
