@@ -85,7 +85,7 @@ shown in the code fragment below:
         print('pipeline stopped.\n')
         
 Refer to the GStreamer tutorials for more information on how to build the pipeline or our sample "Generate a basic pipeline".
-After setting the appsrc property "cap", "blocksize" to the format we are going to push, connect the need_data and enough_data callback function to need-data and enough-data to wait for the appsrc notification to feed the data and then push it to appsrc or end the data. The code blocks below shows how to set the classification metadata by need_data function:
+After setting the appsrc property "cap", "blocksize" to the format we are going to push, connect the need_data and enough_data callback function to need-data and enough-data to wait for the appsrc notification to feed the data and then push it to appsrc or end the data. The code blocks below shows how to set the object-detection metadata by need_data function:
 
     def need_data(src, length) -> Gst.FlowReturn:
         # wait for image data vector, grabVec, is not full
