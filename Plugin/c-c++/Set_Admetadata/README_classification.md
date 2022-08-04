@@ -46,13 +46,13 @@ Second, in the virtual method, ad_set_classification_transform_frame_ip, of this
 	    classification.prob = (double)classification.index / labels.size();
 
         frame_info.stream_id = " ";
-	frame_info.width = 640;
+        frame_info.width = 640;
         frame_info.height = 480;
         frame_info.depth = 0;
         frame_info.channels = 3;
         frame_info.device_idx = 0;
         frame_info.class_results.push_back(classification);
-	meta->batch.frames.push_back(frame_info);
+        meta->batch.frames.push_back(frame_info);
     }
 
 The metadata structure could be find in Edge Vision Analytics SDK Programming Guide : How to Use ADLINK Metadata in Chapter 5. Or can be found in the files:
