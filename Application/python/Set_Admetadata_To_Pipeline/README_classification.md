@@ -4,7 +4,7 @@ Through this sample code, you can learn:
 
 1. Establish a basic gstreamer pipeline in an application program.
 2. Set classification results to admetadata.
-3. Set stream data by appsrc in application program.
+3. Set stream data by using element appsrc in application program.
 
 ## Essential knowledge
 1. Understand plugin sample codes: "Get stream data from pipeline".
@@ -22,7 +22,7 @@ This sample code creates two command pipelines in an application.
 
     appsrc ! admetadrawer ! videoconvert ! ximagesink
     
-VideoCapture reads frame from the video and push them into buffer, grabBuffer. The appsrc will notice callback function, need_data, to feed image data and set classification, then continuously processing downstream in the pipeline. Each processed image will be displayed with random classification in the video.
+VideoCapture reads frame from the video and push them into buffer, grabBuffer. The appsrc will notice callback function, need_data, to feed image data and set classification, then continuously processing downstream in the pipeline. Each processed image will be displayed with random classification label in the video.
 
 ## Description
 OpenCV provides a convenient way for developers wanting to utilize their own API, algorithm, or unique processing. The pipeline in thread provides user to request frame data. This sample shows you how to set the adlink metadata to the buffer. 
