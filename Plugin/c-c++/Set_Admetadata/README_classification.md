@@ -2,7 +2,9 @@
 
 Through this sample code, you can learn:
 1.	Set classification results into admetadata.
-Essential knowledge
+
+## Essential knowledge
+
 1.	Plugin sample code, "video filtr", in C/C++.
 2.	The difference between application code and plugin/element code.
 3.	ADLINK metadata structure. The metadata structure could be find in Edge Vision Analytics SDK Programming Guide: How to Use ADLINK Metadata in Chapter 5.
@@ -22,7 +24,7 @@ This sample shows how to set the adlink metadata inside the element. First, incl
 
     #include "gstadmeta.h"
     
-Second, in the virtual method, ad_set_classification_transform_frame_ip, of this sample has an extra code block, setClassificationData, which is going to set the classification metadata:
+Second, in the virtual method, ad_set_classification_transform_frame_ip, of this sample has an extra code block, setClassificationData, which is going to add the classification metadata into buffer:
 
     gpointer state = NULL;
     GstAdBatchMeta* meta;
@@ -44,13 +46,13 @@ Second, in the virtual method, ad_set_classification_transform_frame_ip, of this
 	    classification.prob = (double)classification.index / labels.size();
 
         frame_info.stream_id = " ";
-	    frame_info.width = 640;
+	frame_info.width = 640;
         frame_info.height = 480;
         frame_info.depth = 0;
         frame_info.channels = 3;
         frame_info.device_idx = 0;
         frame_info.class_results.push_back(classification);
-	    meta->batch.frames.push_back(frame_info);
+	meta->batch.frames.push_back(frame_info);
     }
 
 The metadata structure could be find in Edge Vision Analytics SDK Programming Guide : How to Use ADLINK Metadata in Chapter 5. Or can be found in the files:
@@ -59,11 +61,11 @@ The metadata structure could be find in Edge Vision Analytics SDK Programming Gu
 
 •	EVA_INSTALL_ROOT/include/libs/ai/structure.h
 
-Based on the structure, the frame in vector and the inferenced data are stored in each frame need to be set up. When data in this element is empty, we’ll randomly generate the inference data and set data into the classification result. The simulated result will be set into adbatchmetadata with frame information.
+Based on the structure, AdBatchMeta can set the frame and the inferenced data which stored in each frame based on classification, detection, segmentation or openpose. When the meta data of the buffer is empty, we’ll randomly generate the inference data and set data into the classification result. The simulated result will be set into adbatchmetadata with frame information.
 
 ## Run this sample code
 
-Copy the built plugin libadsetclassification.so file to the plugin folder EVA installed, here used EVA_ROOT to preset the installed path of EVASDK. Then run the pipeline command for testing:
+Copy the built plugin **libadsetclassification.so** file to the plugin folder EVA installed, here used EVA_ROOT to preset the installed path of EVASDK. Then run the pipeline command for testing:
 
     $ gst-launch-1.0 videotestsrc ! video/x-raw, width=640, height=480 ! adsetclassification ! admetadrawer ! videoconvert ! ximagesink
 and you will see the inference result displayed frame by frame in the window:
